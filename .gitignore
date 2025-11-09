@@ -1,2 +1,4 @@
 secrets
-DATA
+DATA/
+.idea/
+venv/
