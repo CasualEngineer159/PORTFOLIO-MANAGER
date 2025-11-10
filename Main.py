@@ -2,31 +2,34 @@ import requests
 import pprint as pp
 import yfinance as yf
 import os
+import csv
 
 class ApiManager:
     def __init__(self, ):
         pass
 
-# Dynamické proměnné
-base_url = 'https://www.alphavantage.co/query'
-function = 'TIME_SERIES_DAILY_ADJUSTED'
-symbol = 'IBM'
-apikey = '5H3BQBCDJJJ9TTFU'
 
-# Složení URL
-params = {
-    'function': function,
-    'symbol': symbol,
-    'apikey': apikey
-}
+class Asset:
+    def __init__(self, ticker):
+        self.ticker = ticker
+    def get_name(self) -> str:
+        pass
 
-# Dotaz na API
-r = requests.get(base_url, params=params)
-data = r.json()
+class Stock(Asset):
+    def __init__(self, ticker):
+        super().__init__(ticker)
 
-pp.pprint(data)
 
-apple= yf.Ticker("VUSA.AS")
+stock = yf.Ticker("VUSA.AS")
+print(type(stock.ticker))
 
-apple_history = apple.history(period="max", interval="1d")
-apple_history.to_csv('DATA/apple.csv')
+stock_history = stock.history(period="max", interval="1d")
+stock_history.to_csv(f'DATA/{stock.ticker}.history.csv')
+stock_info = stock.get_info()
+print(type(stock_info))
+pp.pprint(stock_info["currency"])
+
+with open(f"DATA/{stock.ticker}.info.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=stock_info.keys())
+    writer.writeheader()
+    writer.writerow(stock_info)
