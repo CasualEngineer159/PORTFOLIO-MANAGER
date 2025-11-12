@@ -128,6 +128,30 @@ params = {
 # Dotaz na API
 
 
+#r = requests.get(base_url, params=params)
+#data = r.json()
+
+#pp.pprint(data)
+
+#data = pd.read_csv(io.StringIO(r.text))
+#data.to_csv(f'DATA/{"XAUUSD"}.history.csv', index=False)
+
+
+base_url = 'https://www.alphavantage.co/query'
+function = 'OVERVIEW'
+symbol = 'IBM'
+apikey = '8U1TF9U2LQBKQCRQ'
+
+# Složení URL
+params = {
+    'function': function,   
+    'symbol': symbol,
+    'apikey': apikey,
+}
+
+# Dotaz na API
+
+
 r = requests.get(base_url, params=params)
 data = r.json()
 
