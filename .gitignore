@@ -1,4 +1,5 @@
 secrets
-DATA/
+DATA/*
+!data/.gitkeep
 .idea/
 venv/
