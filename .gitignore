@@ -3,3 +3,4 @@ DATA/*
 !DATA/.gitkeep
 .idea/
 venv/
+__pycache__
