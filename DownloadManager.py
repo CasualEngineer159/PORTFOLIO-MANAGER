@@ -15,6 +15,9 @@ class DownloadManager:
     
     def __init__(self):
         self._ticker = None
+        
+    def get_ticker(self, ticker) -> str:
+        return ticker
 
     def _normalize_history(self, stock_history) -> pd.DataFrame:
 
@@ -136,6 +139,9 @@ class YfinanceManager(DownloadManager):
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(stock_info, f, indent=4)
         return stock_info
+    
+    def get_ticker(self, ticker):
+        return yf.Ticker(ticker).ticker
     
 class AlphaVantage(DownloadManager):
     

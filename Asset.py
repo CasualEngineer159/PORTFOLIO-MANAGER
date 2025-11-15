@@ -11,6 +11,9 @@ class Asset:
         self._stock_info = self.manager.get_info(ticker)
         self._daily_history = self.manager.get_history(ticker)
         self._name = self._stock_info.get("longName", self._ticker)
+        
+    def get_ticker(self) -> str:
+        return self.manager.get_ticker(self._ticker)
 
     def get_name(self) -> str:
         return self._name

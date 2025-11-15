@@ -30,5 +30,3 @@ transactions = pd.read_csv(
     parse_dates=True,
     sep=','
 )
-
-transactions.to_csv(f'DATA/Transactions.parsed.csv')
