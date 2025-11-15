@@ -4,3 +4,4 @@ DATA/*
 .idea/
 venv/
 __pycache__
+API.json

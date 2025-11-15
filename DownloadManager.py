@@ -16,6 +16,33 @@ class DownloadManager:
     def __init__(self):
         self._ticker = None
 
+    def _normalize_history(self, stock_history) -> pd.DataFrame:
+
+        # Převedení datových indexů do struktury pandas DataFrame
+        stock_history.index = pd.to_datetime(stock_history.index, utc=True)
+
+        # Převedení indexu jen na datumy bez času
+        stock_history.index = stock_history.index.date
+
+        # Vytvoření úplné datové řady pro danou hystorii
+        full_date_range = pd.date_range(
+            start=stock_history.index.min(),
+            end=datetime.now().date(),
+            freq='D'  # Frekvence 'D' znamená denní
+        )
+        full_date_range.name = 'Date'
+
+        # Doplnění prázdných polí sloupce "Close" předchozí hodnotou
+        close_prices = stock_history[['Close']]
+        stock_history_filled = close_prices.reindex(full_date_range).ffill()
+
+        # Vytvoření sloupce s denním procentuálním přírůstkem
+        daily_returns = stock_history_filled['Close'].pct_change()
+        daily_returns.name = 'Daily_Return'
+        stock_history_filled['Daily_Return'] = daily_returns
+
+        return stock_history_filled
+
     def _load_daily_history(self) -> pd.DataFrame:
         """Načte historická data z CSV souboru zpět do pandas.DataFrame."""
         try:
@@ -57,38 +84,54 @@ class DownloadManager:
     def _download_stock_info(self) -> dict:
         print(f"Info download not implemented for {self._ticker}")
         return {}
-        
+
+    # Vrátí informace o Assetu
     def get_info(self, ticker) ->  dict:
         self._ticker = ticker
         info = self._load_stock_info()
         if not info:
             info = self._download_stock_info()
         return info
+
+    # Vrátí historii Assetu
     def get_history(self, ticker) -> pd.DataFrame:
         self._ticker = ticker
         history = self._load_daily_history()
-        if history.empty:
+        if history.empty or get_last_business_day() > history.index.max().date():
             history = self._download_daily_history()
+
         return history
 
-class yfinanceManager(DownloadManager):
+class YfinanceManager(DownloadManager):
     
     def __init__(self):
         super().__init__()
         self._yahoo_ticker = None
-        
+
     def get_info(self, ticker):
         self._yahoo_ticker = yf.Ticker(ticker)
         return super().get_info(ticker)
         
     def _download_daily_history(self) -> pd.DataFrame:
+        print(f"stahujeme historii {self._ticker}")
+
+        # Stažení dat z Yahoo
         stock_history = self._yahoo_ticker.history(period="max", interval="1d")
+
+        # Úprava dat
+        stock_history = self._normalize_history(stock_history)
+
+        # Zápis do souboru
         stock_history.to_csv(f'DATA/{self._ticker}.history.csv')
         return stock_history
 
     def _download_stock_info(self) -> dict:
-        print(f"stahujeme {self._ticker}")
+        print(f"stahujeme info {self._ticker}")
+
+        # Stažení dat z Yahoo
         stock_info = self._yahoo_ticker.get_info()
+
+        # Zápis do souboru
         file_path = f"DATA/{self._ticker}.info.json"
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(stock_info, f, indent=4)
@@ -98,33 +141,30 @@ class AlphaVantage(DownloadManager):
     
     def __init__(self):
         super().__init__()
-    
+
+        # Načtení API klíče z tajného json souboru
+        with open("API.json", 'r', encoding='utf-8') as f:
+            self.API = json.load(f)
+
     def _download_daily_history(self) -> pd.DataFrame:
         print("Stahujeme z AlphaVantage")
-        
-        base_url = 'https://www.alphavantage.co/query'
-        function = 'TIME_SERIES_DAILY'
-        symbol = self._ticker
-        apikey = '5H3BQBCDJJJ9TTFU'
-        datatype = "csv"
-        outputsize = "full"
 
-        # Složení URL
+        # Vytvoření url pro API dotaz
+        base_url = 'https://www.alphavantage.co/query'
         params = {
-            'function': function,   
-            'symbol': symbol,
-            'apikey': apikey,
-            "datatype" : datatype,
-            "outputsize" : outputsize
+            'function': 'TIME_SERIES_DAILY',
+            'symbol': self._ticker,
+            'apikey': self.API['AlphaVantage'],
+            "datatype" : "csv",
+            "outputsize" : "full"
         }
 
         # Dotaz na API
         r = requests.get(base_url, params=params)
-        data = pd.read_csv(io.StringIO(r.text))
-        
-        pp.pprint(data.head())
-        
-        data = data.rename(columns={
+        stock_history = pd.read_csv(io.StringIO(r.text))
+
+        # Sjednocení názvů sloupců
+        stock_history = stock_history.rename(columns={
             "timestamp": "Date",
             "open": "Open",
             "high": "High",
@@ -132,7 +172,15 @@ class AlphaVantage(DownloadManager):
             "close": "Close",
             "volume": "Volume"
         })
-        
-        data.to_csv(f'DATA/{"XAUUSD"}.history.csv', index=False)
+
+        # Nastavení indexu
+        stock_history = stock_history.set_index('Date')
+
+        # Úprava dat
+        stock_history = self._normalize_history(stock_history)
+
+        # Zápis do souboru
+        stock_history.to_csv(f'DATA/{self._ticker}.history.csv')
+
         return self._load_daily_history()
     
