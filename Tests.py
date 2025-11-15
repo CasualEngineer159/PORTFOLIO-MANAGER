@@ -21,3 +21,14 @@ r = requests.get(url)
 stock_history = pd.read_csv(io.StringIO(r.text))
 
 stock_history.to_csv(f'DATA/{ticker}.test.history.csv')
+
+file_path = f'DATA/Transactions.csv'
+
+transactions = pd.read_csv(
+    file_path,
+    index_col="Datum",
+    parse_dates=True,
+    sep=','
+)
+
+transactions.to_csv(f'DATA/Transactions.parsed.csv')
