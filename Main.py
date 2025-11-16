@@ -1,4 +1,5 @@
 from Asset import *
+from rich import print
 
 snp = ETF("VUSA.AS")
 apple = Stock("US67066G1040")
@@ -8,12 +9,14 @@ gold_futures = Futures("GC=F")
 
 class Position:
     
-    def __init__(self, price=float, date=datetime, asset=Asset, amount=int):
+    def __init__(self, price: float, date: datetime, asset: Asset, amount: int):
+        self._asset = asset
         self._ticker = asset.get_ticker()
         self._amount = amount
         self._name = asset.get_name()
         self._position_changes = {}
-        self._position_changes[date] = [amount, price]
+        self._daily_history = None
+        self.change_position(amount=amount, date=date, price=price)
         
     def print_overview(self):
         print(f"Number of {self._name} owned is {self._amount}.")
@@ -23,17 +26,34 @@ class Position:
         pp.pprint(self._position_changes)
         return ""
 
-    def change_position(self, amount=int, date=datetime, price=float):
+    def get_earliest_record_date(self) -> datetime:
+        return self._asset.get_earliest_record_date()
+
+    def _get_history(self, date):
+        if (self._daily_history is None) or (self._daily_history.index.min().date() > date.date()):
+            self._daily_history = self._asset.get_prices(date)
+
+    def change_position(self, amount: int, date: datetime, price: float):
+
         # Handle pokud jsou dvě transakce za jeden den. Sečte se počet kusů a zprůměruje cena
-        print("Měníme pozici")
+        self._get_history(date)
+        if self.get_earliest_record_date() < date:
+            low = self._daily_history.loc[date, "low"]
+            high = self._daily_history.loc[date, "high"]
+            print(f"low: {low}, price: {price}, high: {high}")
+            if not low <= price <= high:
+                print("[red]!!! Cena mimo denní rozsah!!![/red]")
+        else:
+            print(f"[red]!!!Pozor, v datu transakce ještě není záznam cen!!![/red]")
+
         if date in self._position_changes:
             new_amount = self._position_changes[date][0] + amount
             new_price = (self._position_changes[date][1] * self._position_changes[date][0] + amount * price) / new_amount
-            self._amount = new_amount
+            self._amount = max(0, new_amount)
             self._position_changes[date] = [new_amount, new_price]
         else:
-            self._position_changes[date] = [amount, price]
-            self._amount = self._amount + amount
+            self._position_changes[date] = [max(0, amount), price]
+            self._amount = max(0, amount)
 
 class Portfolio:
     def __init__(self):
@@ -43,12 +63,18 @@ class Portfolio:
         for item in self._position_dict.values():
             item.print_overview()
         return ""
+
+    def get_earliest_record_date(self) -> datetime:
+        first_dates = []
+        for item in self._position_dict.values():
+            first_dates.append(item.get_earliest_record_date())
+        print(max(first_dates).date())
+        return max(first_dates).date()
         
     def get_position(self, ticker) -> Position:
         return self._position_dict[ticker]
         
-    def transaction(self, price = float, amount = int, date = datetime, asset=Asset):
-        date = date.date()
+    def transaction(self, price: float, amount: int, date: datetime, asset: Asset):
         if asset.get_ticker() not in self._position_dict:
             self._position_dict[asset.get_ticker()] = Position(price, date, asset=asset,amount=amount)
         else:
@@ -56,10 +82,15 @@ class Portfolio:
 
 
 portfolio = Portfolio()
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2021,8,13), amount=3,price=67.2021255493164)
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2021,8,14), amount=-3,price=67.2021255493164)
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2021,8,13), amount=15,price=200)
+
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2019,8,14), amount=3,price=67.2021255493164)
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,8,13), amount=15,price=200)
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2021,8,13), amount=-60,price=67.2021255493164)
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2022,8,13), amount=5,price=67.2021255493164)
 portfolio.transaction(asset=Stock("aapl"), date=datetime(2024,8,13), amount=4,price=600)
-portfolio.transaction(asset=Commodity("XPTUSD"), date=datetime(2010,8,14), amount=7,price=1050)
+portfolio.transaction(asset=Commodity("XPTUSD"), date=datetime(2024,8,13), amount=4,price=600)
+portfolio.transaction(asset=Commodity("XPLUSD"), date=datetime(2024,8,13), amount=4,price=600)
+
 print(portfolio.get_position("VUSA.AS"))
 print(portfolio)
+portfolio.get_earliest_record_date()

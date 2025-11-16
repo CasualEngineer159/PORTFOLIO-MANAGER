@@ -18,6 +18,10 @@ class Asset:
     def get_name(self) -> str:
         return self._name
 
+    def get_earliest_record_date(self) -> datetime:
+        self._daily_history.sort_index()
+        return self._daily_history.index[0]
+
     def plot_closing_price(self):
         plt.figure(figsize=(10, 6))
         # Vykreslení zavírací ceny, kde index (datum) je na ose X
@@ -29,6 +33,10 @@ class Asset:
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.tight_layout()
         plt.show()
+
+    def get_prices(self, start_date) -> pd.DataFrame:
+        self._daily_history.sort_index()
+        return self._daily_history.loc[start_date:]
 
 
 class Stock(Asset):

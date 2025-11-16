@@ -41,8 +41,17 @@ class DownloadManager:
 
         # Vytvoření sloupce s denním procentuálním přírůstkem
         daily_returns = stock_history_filled['Close'].pct_change()
-        daily_returns.name = 'Daily_Return'
-        stock_history_filled['Daily_Return'] = daily_returns
+        daily_returns.name = 'return'
+        stock_history_filled['return'] = daily_returns
+
+        # Zachování sloupců min a max
+        daily_min = stock_history[["Low"]].reindex(full_date_range).ffill()
+        daily_min.name = 'low'
+        stock_history_filled['low'] = daily_min
+
+        daily_max = stock_history[["High"]].reindex(full_date_range).ffill()
+        daily_max.name = 'high'
+        stock_history_filled['high'] = daily_max
 
         return stock_history_filled
 
