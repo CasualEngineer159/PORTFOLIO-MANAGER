@@ -6,10 +6,145 @@ import json
 import io
 from pandas.tseries.offsets import BDay
 from datetime import datetime
+import numpy as np
+
+from scipy.stats import zscore
+
 
 def get_last_business_day() -> datetime:
     today = datetime.now().date()
     return (today - BDay(1)).date()
+
+# Vrátí vyfiltrovanou historii dat, filtruje na základě hodnot sloupce "Close"
+def _delete_duplicit_data(stock_history) -> pd.DataFrame:
+
+    # Vytoření masky duplicitů - pokud se po posunu hodnot o jedno nahoru pozice v seznamu rovnají, bude na této pozici v masce True)
+    duplicit_mask = (stock_history["Close"] == stock_history["Close"].shift())
+
+    # Nastavení nového vyčištěného seznamu invertování masky (v novém seznamu budou jen pole kde je v masce False, neboli žádné duplicity)
+    stock_history_clean = stock_history[~duplicit_mask].copy()
+
+    # Vrátí vyfiltrovanou historii
+    return stock_history_clean
+
+# Přimknutí první hodnoty v seznamu k další následující pro příklad že by tam při filtraci vznikla mezera
+def _close_initial_gap(stock_history) -> pd.DataFrame:
+
+    # Načtení datumů prvních dnou hodnot
+    stary_index_prvniho = stock_history.index[0]
+    index_druheho = stock_history.index[1]
+
+    # Výpočet nového datumu
+    novy_index_prvniho = index_druheho - pd.Timedelta(days=1)
+
+    # Přenastavení indexu první hodnoty
+    stock_history.rename(index={stary_index_prvniho: novy_index_prvniho}, inplace=True)
+
+    # Přimknutí první hodnoty v seznamu k další následující pro příklad že by tam při filtraci vznikla mezera
+    return stock_history
+
+# Vrátí opravený dataframe kde jen s honotami kde se Low a High nerovnají
+def _delete_flat_data(stock_history) -> pd.DataFrame:
+
+    # Vytvoření masky kde se Low rovná High
+    flat_mask = (stock_history["low"] == stock_history["high"])
+
+    # Vytvoření opravené ho dataframe pomocí inverze masky
+    stock_history_clean = stock_history[~flat_mask].copy()
+
+    # Vrátí opravený dataframe kde jen s honotami kde se Low a High nerovnají
+    return stock_history_clean
+
+# Smaže outliery pomocí thresholdů růstu a poklesu
+def _delete_outliers(stock_history) -> pd.DataFrame:
+
+    # Nastavení thresholdů
+    growth_threshold = 1.0
+    fall_threshold = -0.5
+
+    # Výpočet procentuální změny mezi daty
+    daily_returns = stock_history['Close'].pct_change()
+
+    # Vytvoření masek které najdou hodnoty změny nevyhovující thresholdům
+    outlier_mask_growth = (daily_returns > growth_threshold)
+    outlier_mask_fall = (daily_returns < fall_threshold)
+
+    # Vytvoření listů indexů pomocí masek
+    outlier_index_growth = stock_history[outlier_mask_growth].index.tolist()
+    outlier_index_fall = stock_history[outlier_mask_fall].index.tolist()
+
+    print(f"\nIndexy, kde je chyba podle z threshold: {outlier_index_growth}")
+    print(f"\nIndexy, kde je chyba podle z threshold: {outlier_index_fall}")
+
+    # Vytvoření párů pro vymazání
+    pairs = list(zip(outlier_index_growth, outlier_index_fall))
+    print(f"\nNalezeny tyto chybné bloky (páry): {pairs}")
+
+    # Iterací vymažeme páry dat
+    for start_date, end_date in pairs:
+
+        index_to_delete = stock_history.loc[start_date:(end_date - pd.Timedelta(days=1))].index
+
+        stock_history = stock_history.drop(index_to_delete)
+
+    return stock_history
+
+# Vrátí plně upravená data připravené k použití v grafu
+def _normalize_history(stock_history) -> pd.DataFrame:
+
+    # Převedení datových indexů do struktury pandas DataFrame
+    stock_history.index = pd.to_datetime(stock_history.index, utc=True)
+
+    # Převedení indexu jen na datumy bez času
+    stock_history.index = stock_history.index.date
+
+    # Seřazení dat dne indexu (data)
+    stock_history = stock_history.sort_index()
+
+    # Smazání outlierů
+    stock_history = _delete_outliers(stock_history)
+
+    stock_history.to_csv(f'DATA/XAUUSD.history.smazaneoutliers.csv')
+
+    # Smazání opakujících se dat
+    stock_history = _delete_duplicit_data(stock_history)
+
+    # Smazání plochých dat (Low = High)
+    stock_history = _delete_flat_data(stock_history)
+
+    # Odstranění mezery mezi prvním a druhým záznamem (vzniké filtrací)
+    stock_history = _close_initial_gap(stock_history)
+
+    # Vytvoření úplné datové řady pro danou hystorii
+    full_date_range = pd.date_range(
+        start=stock_history.index.min(),
+        end=datetime.now().date(),
+        freq='D'  # Frekvence 'D' znamená denní
+    )
+    full_date_range.name = 'Date'
+
+    # Doplnění prázdných polí sloupce "Close" předchozí hodnotou
+    close_prices = stock_history[['Close']]
+    stock_history_filled = close_prices.reindex(full_date_range).ffill()
+
+    # Vytvoření sloupce s denním procentuálním přírůstkem
+    daily_returns = stock_history_filled['Close'].pct_change()
+    daily_returns.name = 'return'
+    stock_history_filled['return'] = daily_returns
+
+    # Zachování doplněného sloupce min
+    daily_min = stock_history[["low"]].reindex(full_date_range).ffill()
+    daily_min.name = 'low'
+    stock_history_filled['low'] = daily_min
+
+    # Zachování doplněného sloupce max
+    daily_max = stock_history[["high"]].reindex(full_date_range).ffill()
+    daily_max.name = 'high'
+    stock_history_filled['high'] = daily_max
+
+    # Vrátí plně upravená data připravené k použití v grafu
+    return stock_history_filled
+
 
 class DownloadManager:
     
@@ -19,44 +154,8 @@ class DownloadManager:
     def get_ticker(self, ticker) -> str:
         return ticker
 
-    def _normalize_history(self, stock_history) -> pd.DataFrame:
-
-        # Převedení datových indexů do struktury pandas DataFrame
-        stock_history.index = pd.to_datetime(stock_history.index, utc=True)
-
-        # Převedení indexu jen na datumy bez času
-        stock_history.index = stock_history.index.date
-
-        # Vytvoření úplné datové řady pro danou hystorii
-        full_date_range = pd.date_range(
-            start=stock_history.index.min(),
-            end=datetime.now().date(),
-            freq='D'  # Frekvence 'D' znamená denní
-        )
-        full_date_range.name = 'Date'
-
-        # Doplnění prázdných polí sloupce "Close" předchozí hodnotou
-        close_prices = stock_history[['Close']]
-        stock_history_filled = close_prices.reindex(full_date_range).ffill()
-
-        # Vytvoření sloupce s denním procentuálním přírůstkem
-        daily_returns = stock_history_filled['Close'].pct_change()
-        daily_returns.name = 'return'
-        stock_history_filled['return'] = daily_returns
-
-        # Zachování sloupců min a max
-        daily_min = stock_history[["Low"]].reindex(full_date_range).ffill()
-        daily_min.name = 'low'
-        stock_history_filled['low'] = daily_min
-
-        daily_max = stock_history[["High"]].reindex(full_date_range).ffill()
-        daily_max.name = 'high'
-        stock_history_filled['high'] = daily_max
-
-        return stock_history_filled
-
     def _load_daily_history(self) -> pd.DataFrame:
-        """Načte historická data z CSV souboru zpět do pandas.DataFrame."""
+        # Načte historická data z CSV souboru zpět do pandas.DataFrame.
         try:
             file_path = f'DATA/{self._ticker}.history.csv'
 
@@ -75,7 +174,7 @@ class DownloadManager:
             return pd.DataFrame()  # Vrátí prázdný DataFrame v případě chyby
 
     def _load_stock_info(self) -> dict:
-        """Načte informace o akcii z JSON souboru zpět do slovníku."""
+        # Načte informace o akcii z JSON souboru zpět do slovníku.
         try:
             file_path = f"DATA/{self._ticker}.info.json"
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -131,7 +230,7 @@ class YfinanceManager(DownloadManager):
         stock_history = self._yahoo_ticker.history(period="max", interval="1d")
 
         # Úprava dat
-        stock_history = self._normalize_history(stock_history)
+        stock_history = _normalize_history(stock_history)
 
         # Zápis do souboru
         stock_history.to_csv(f'DATA/{self._ticker}.history.csv')
@@ -161,7 +260,7 @@ class AlphaVantage(DownloadManager):
         with open("API.json", 'r', encoding='utf-8') as f:
             self.API = json.load(f)
 
-    def _download_daily_history(self) -> pd.DataFrame:
+    def _download_daily_history_(self) -> pd.DataFrame:
         print("Stahujeme z AlphaVantage")
 
         # Vytvoření url pro API dotaz
@@ -182,8 +281,8 @@ class AlphaVantage(DownloadManager):
         stock_history = stock_history.rename(columns={
             "timestamp": "Date",
             "open": "Open",
-            "high": "High",
-            "low": "Low",
+            "high": "high",
+            "low": "low",
             "close": "Close",
             "volume": "Volume"
         })
@@ -192,10 +291,29 @@ class AlphaVantage(DownloadManager):
         stock_history = stock_history.set_index('Date')
 
         # Úprava dat
-        stock_history = self._normalize_history(stock_history)
+        stock_history = _normalize_history(stock_history)
 
         # Zápis do souboru
         stock_history.to_csv(f'DATA/{self._ticker}.history.csv')
 
         return self._load_daily_history()
+
+    def _download_daily_history(self) -> pd.DataFrame:
+        print("načítáme starý soubor")
+        file_path = f'DATA/XAUUSD.history.previous.csv'
+
+        # Načtení CSV:
+        # 1. index_col='Date': Nastaví sloupec 'Date' jako index.
+        # 2. parse_dates=True: Zajistí, že index bude interpretován jako datum (datetime).
+        stock_history = pd.read_csv(
+            file_path,
+            index_col="Date",
+            parse_dates=True
+        )
+        # print(f"✅ Historie pro {self._ticker} načtena z CSV.")
+        # Zápis do souboru
+        stock_history = _normalize_history(stock_history)
+        stock_history.to_csv(f'DATA/{self._ticker}.history.csv')
+        return stock_history
+
     

@@ -1,7 +1,7 @@
 import csv
 from DownloadManager import *
 
-ticker = 'AAPL'
+ticker = 'VUSA.AS'
 
 with open("API.json", 'r', encoding='utf-8') as f:
     API = json.load(f)

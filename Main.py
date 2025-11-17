@@ -40,11 +40,13 @@ class Position:
         if self.get_earliest_record_date() < date:
             low = self._daily_history.loc[date, "low"]
             high = self._daily_history.loc[date, "high"]
-            print(f"low: {low}, price: {price}, high: {high}")
+            #print(f"low: {low}, price: {price}, high: {high}")
             if not low <= price <= high:
-                print("[red]!!! Cena mimo denní rozsah!!![/red]")
+                #print("[red]!!! Cena mimo denní rozsah!!![/red]")
+                pass
         else:
-            print(f"[red]!!!Pozor, v datu transakce ještě není záznam cen!!![/red]")
+            #print(f"[red]!!!Pozor, v datu transakce ještě není záznam cen!!![/red]")
+            pass
 
         if date in self._position_changes:
             new_amount = self._position_changes[date][0] + amount
@@ -91,6 +93,8 @@ portfolio.transaction(asset=Stock("aapl"), date=datetime(2024,8,13), amount=4,pr
 portfolio.transaction(asset=Commodity("XPTUSD"), date=datetime(2024,8,13), amount=4,price=600)
 portfolio.transaction(asset=Commodity("XPLUSD"), date=datetime(2024,8,13), amount=4,price=600)
 
-print(portfolio.get_position("VUSA.AS"))
-print(portfolio)
-portfolio.get_earliest_record_date()
+#print(portfolio.get_position("VUSA.AS"))
+#print(portfolio)
+#portfolio.get_earliest_record_date()
+
+gold.plot_closing_price()
