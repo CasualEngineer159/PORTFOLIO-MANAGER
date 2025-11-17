@@ -1,6 +1,8 @@
 secrets
 DATA/*
 !DATA/.gitkeep
+GRAPHS/*
+!GRAPHS/.gitkeep
 .idea/
 venv/
 __pycache__

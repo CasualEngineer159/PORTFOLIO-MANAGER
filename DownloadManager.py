@@ -47,7 +47,7 @@ def _close_initial_gap(stock_history) -> pd.DataFrame:
 def _delete_flat_data(stock_history) -> pd.DataFrame:
 
     # Vytvoření masky kde se Low rovná High
-    flat_mask = (stock_history["low"] == stock_history["high"])
+    flat_mask = (stock_history["Low"] == stock_history["High"])
 
     # Vytvoření opravené ho dataframe pomocí inverze masky
     stock_history_clean = stock_history[~flat_mask].copy()
@@ -55,7 +55,7 @@ def _delete_flat_data(stock_history) -> pd.DataFrame:
     # Vrátí opravený dataframe kde jen s honotami kde se Low a High nerovnají
     return stock_history_clean
 
-# Smaže outliery pomocí thresholdů růstu a poklesu
+# Vrátí dataframe se smazanými outliery
 def _delete_outliers(stock_history) -> pd.DataFrame:
 
     # Nastavení thresholdů
@@ -80,6 +80,10 @@ def _delete_outliers(stock_history) -> pd.DataFrame:
     pairs = list(zip(outlier_index_growth, outlier_index_fall))
     print(f"\nNalezeny tyto chybné bloky (páry): {pairs}")
 
+    # Pokud je list pairs prázdný, vrátíme předčasně
+    if not pairs:
+        return stock_history
+
     # Iterací vymažeme páry dat
     for start_date, end_date in pairs:
 
@@ -87,6 +91,7 @@ def _delete_outliers(stock_history) -> pd.DataFrame:
 
         stock_history = stock_history.drop(index_to_delete)
 
+    # Vrátí dataframe se smazanými outliery
     return stock_history
 
 # Vrátí plně upravená data připravené k použití v grafu
@@ -100,11 +105,9 @@ def _normalize_history(stock_history) -> pd.DataFrame:
 
     # Seřazení dat dne indexu (data)
     stock_history = stock_history.sort_index()
-
+    
     # Smazání outlierů
     stock_history = _delete_outliers(stock_history)
-
-    stock_history.to_csv(f'DATA/XAUUSD.history.smazaneoutliers.csv')
 
     # Smazání opakujících se dat
     stock_history = _delete_duplicit_data(stock_history)
@@ -133,14 +136,14 @@ def _normalize_history(stock_history) -> pd.DataFrame:
     stock_history_filled['return'] = daily_returns
 
     # Zachování doplněného sloupce min
-    daily_min = stock_history[["low"]].reindex(full_date_range).ffill()
-    daily_min.name = 'low'
-    stock_history_filled['low'] = daily_min
+    daily_min = stock_history[["Low"]].reindex(full_date_range).ffill()
+    daily_min.name = 'Low'
+    stock_history_filled['Low'] = daily_min
 
     # Zachování doplněného sloupce max
-    daily_max = stock_history[["high"]].reindex(full_date_range).ffill()
-    daily_max.name = 'high'
-    stock_history_filled['high'] = daily_max
+    daily_max = stock_history[["High"]].reindex(full_date_range).ffill()
+    daily_max.name = 'High'
+    stock_history_filled['High'] = daily_max
 
     # Vrátí plně upravená data připravené k použití v grafu
     return stock_history_filled
@@ -189,11 +192,11 @@ class DownloadManager:
             return {}
     
     def _download_daily_history(self) -> pd.DataFrame:
-        print(f"History download not implemented for {self._ticker}")
+        #print(f"History download not implemented for {self._ticker}")
         return pd.DataFrame({})
         
     def _download_stock_info(self) -> dict:
-        print(f"Info download not implemented for {self._ticker}")
+        #print(f"Info download not implemented for {self._ticker}")
         return {}
 
     # Vrátí informace o Assetu
@@ -228,6 +231,8 @@ class YfinanceManager(DownloadManager):
 
         # Stažení dat z Yahoo
         stock_history = self._yahoo_ticker.history(period="max", interval="1d")
+        
+        pp.pprint(stock_history.head())
 
         # Úprava dat
         stock_history = _normalize_history(stock_history)
@@ -260,7 +265,7 @@ class AlphaVantage(DownloadManager):
         with open("API.json", 'r', encoding='utf-8') as f:
             self.API = json.load(f)
 
-    def _download_daily_history_(self) -> pd.DataFrame:
+    def _download_daily_history(self) -> pd.DataFrame:
         print("Stahujeme z AlphaVantage")
 
         # Vytvoření url pro API dotaz
@@ -281,8 +286,8 @@ class AlphaVantage(DownloadManager):
         stock_history = stock_history.rename(columns={
             "timestamp": "Date",
             "open": "Open",
-            "high": "high",
-            "low": "low",
+            "high": "High",
+            "low": "Low",
             "close": "Close",
             "volume": "Volume"
         })
@@ -298,7 +303,7 @@ class AlphaVantage(DownloadManager):
 
         return self._load_daily_history()
 
-    def _download_daily_history(self) -> pd.DataFrame:
+    def _download_daily_history_(self) -> pd.DataFrame:
         print("načítáme starý soubor")
         file_path = f'DATA/XAUUSD.history.previous.csv'
 

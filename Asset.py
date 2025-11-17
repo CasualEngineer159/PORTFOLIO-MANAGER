@@ -32,7 +32,12 @@ class Asset:
         plt.ylabel('Zavírací cena', fontsize=12)
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.tight_layout()
-        plt.show()
+        
+        filename = f"GRAPHS/{self._name}_graf.png"
+        plt.savefig(filename)
+        
+        # Zavřeme figure z paměti, aby se nezobrazila
+        plt.close()
 
     def get_prices(self, start_date) -> pd.DataFrame:
         self._daily_history.sort_index()
@@ -43,27 +48,27 @@ class Stock(Asset):
     def __init__(self, ticker):
         self.manager = yfinance_m
         super().__init__(ticker)
-        print(self._name)
+        #print(self._name)
 
 class Commodity(Asset):
     def __init__(self, ticker):
         self.manager = aplha_vantage_m
         super().__init__(ticker)
-        print(self._name)
+        #print(self._name)
 
 
 class Crypto(Asset):
     def __init__(self, ticker):
         self.manager = yfinance_m
         super().__init__(ticker)
-        print(self._name)
+        #print(self._name)
 
 
 class ETF(Asset):
     def __init__(self, ticker):
         self.manager = yfinance_m
         super().__init__(ticker)
-        print(self._name)
+        #print(self._name)
 
 
 class Futures(Asset):
@@ -71,4 +76,4 @@ class Futures(Asset):
         self.manager = yfinance_m
         super().__init__(ticker)
         self._name = self._stock_info.get("shortName", self._ticker)
-        print(self._name)
+        #print(self._name)

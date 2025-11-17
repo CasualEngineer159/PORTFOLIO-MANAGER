@@ -18,6 +18,37 @@ class Position:
         self._daily_history = None
         self.change_position(amount=amount, date=date, price=price)
         
+    def _create_transation_history(self, date):
+        
+        amount = self._position_changes[date][0]
+        price = self._position_changes[date][1]
+        
+        closing_price = self._daily_history.loc[date, "Close"]
+        
+        intraday_change = (closing_price - price) / price
+        
+        multipliers = 1 + self._daily_history.loc[date:, "return"]
+        multipliers.iloc[0] = intraday_change + 1
+        
+        cum_multipliers = multipliers.cumprod().shift()
+        cum_multipliers = cum_multipliers.fillna(1.0)
+        
+        prices = price * amount * cum_multipliers
+        
+        pp.pprint(multipliers)
+        pp.pprint(cum_multipliers)
+        pp.pprint(prices)
+        
+    def create_position_history(self):
+        
+        multipliers = 1 + self._daily_history["return"]
+        multipliers = multipliers.fillna(1.0)
+        
+        cum_multipliers = multipliers.cumprod().shift()
+        
+        pp.pprint(multipliers)
+        pp.pprint(cum_multipliers)
+        
     def print_overview(self):
         print(f"Number of {self._name} owned is {self._amount}.")
         
@@ -38,15 +69,13 @@ class Position:
         # Handle pokud jsou dvě transakce za jeden den. Sečte se počet kusů a zprůměruje cena
         self._get_history(date)
         if self.get_earliest_record_date() < date:
-            low = self._daily_history.loc[date, "low"]
-            high = self._daily_history.loc[date, "high"]
+            low = self._daily_history.loc[date, "Low"]
+            high = self._daily_history.loc[date, "High"]
             #print(f"low: {low}, price: {price}, high: {high}")
             if not low <= price <= high:
-                #print("[red]!!! Cena mimo denní rozsah!!![/red]")
-                pass
+                print(f"[red]!!! Cena {self._name} mimo denní rozsah!!![/red] platný rozsah: low: {low}, price: {price}, high: {high}")
         else:
-            #print(f"[red]!!!Pozor, v datu transakce ještě není záznam cen!!![/red]")
-            pass
+            print(f"[red]!!!Pozor, v datu {date.date()} transakce {self._name} ještě není záznam cen!!![/red] první datum záznamu: {self.get_earliest_record_date().date()}")
 
         if date in self._position_changes:
             new_amount = self._position_changes[date][0] + amount
@@ -85,7 +114,9 @@ class Portfolio:
 
 portfolio = Portfolio()
 
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2019,8,14), amount=3,price=67.2021255493164)
+date = datetime(2022,8,14)
+
+portfolio.transaction(asset=ETF("VUSA.AS"), date=date, amount=3,price=70)
 portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,8,13), amount=15,price=200)
 portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2021,8,13), amount=-60,price=67.2021255493164)
 portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2022,8,13), amount=5,price=67.2021255493164)
@@ -97,4 +128,9 @@ portfolio.transaction(asset=Commodity("XPLUSD"), date=datetime(2024,8,13), amoun
 #print(portfolio)
 #portfolio.get_earliest_record_date()
 
-gold.plot_closing_price()
+#gold.plot_closing_price()
+#snp.plot_closing_price()
+#apple.plot_closing_price()
+
+#portfolio.get_position("VUSA.AS").create_position_history()
+portfolio.get_position("VUSA.AS")._create_transation_history(date)
