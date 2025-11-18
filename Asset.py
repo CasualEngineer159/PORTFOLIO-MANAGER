@@ -10,6 +10,9 @@ def plot_price(history, date, plot_name):
 
     history_to_plot = history.loc[date:, ["Close"]]
 
+    # Reindexuje pro správné vykreselní
+    history_to_plot = history_to_plot.asfreq('D')
+
     # Vykreslení zavírací ceny, kde index (datum) je na ose X
     history_to_plot.plot(ax=plt.gca())
 
@@ -49,7 +52,9 @@ class Asset:
 
     def get_prices(self, start_date) -> pd.DataFrame:
         self._daily_history.sort_index()
-        return self._daily_history.loc[start_date:].copy()
+        #print(f"get_prices index type: {type(self._daily_history.index[0])} \nstart_date: {type(start_date)}")
+        nearest_row = self._daily_history.asof(start_date).name
+        return self._daily_history.loc[nearest_row:].copy()
 
 
 class Stock(Asset):

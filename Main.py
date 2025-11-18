@@ -3,6 +3,7 @@ from rich import print
 
 snp = ETF("VUSA.AS")
 apple = Stock("US67066G1040")
+Apple = Stock("aapl")
 bitcoin = Crypto("BTC-USD")
 gold = Commodity("XAUUSD")
 gold_futures = Futures("GC=F")
@@ -22,12 +23,6 @@ class Position:
         keys = self._position_changes.keys()
         return min(keys)
 
-    # Strašná prasárna, prostě přidá uživatelem zadanou hodnotu do historie akcie
-    def _rig_history(self, date, price):
-        self._daily_history.loc[date, "Close"] = price
-        self._daily_history = self._daily_history.sort_index()
-        pp.pprint(self._daily_history)
-
     # Doplnění dat
     def _fill_history_data(self):
 
@@ -42,24 +37,47 @@ class Position:
         )
         full_date_range.name = 'Date'
         
-        self._daily_history = self._daily_history.reindex(full_date_range)
+        #self._daily_history = self._daily_history.reindex(full_date_range)
 
     
     # Vrátí data růstu z dané transakce
     def _create_transaction_history(self, date) -> pd.DataFrame:
-        
+
         # Získání informací o pozici
         amount = self._position_changes[date][0]
         price = self._position_changes[date][1]
-        
+
+        daily_history_copy = self._daily_history.copy(deep=True)
+
+        multiplier_index_to_change = 0
+
+        # Pokud ještě neexistuje záznam, doplníme
+        if date < self._asset.get_earliest_record_date():
+
+            closing_price = daily_history_copy.loc[self.get_earliest_record_date(), "Close"]
+            daily_history_copy.loc[date, "Close"] = price
+            daily_history_copy = daily_history_copy.sort_index()
+            multiplier_index_to_change = 1
+
+        else:
+            new_index = daily_history_copy.index.union([date])
+            re_indexed_series = daily_history_copy['Close'].reindex(new_index, method='bfill')
+            closing_price = re_indexed_series.loc[date]
+
         # Výpočet procentuálního rozdílu nákupní ceny od poslední obchodované toho dne
-        closing_price = self._daily_history.loc[date, "Close"]
         intraday_change = (closing_price - price) / price
-        
+
         # Převedení daily_change na procenta
-        multipliers = 1 + self._daily_history.loc[date:, "return"]
+        new_index = daily_history_copy.index.union([date])
+        re_indexed_series = daily_history_copy['return'].reindex(new_index, method='bfill')
+        multipliers = 1 + re_indexed_series.loc[date:].copy(deep=True)
         multipliers.iloc[0] = intraday_change + 1
-        
+
+        if date < self._asset.get_earliest_record_date():
+            multipliers.iloc[1] = 1
+
+        #pp.pprint(multipliers)
+
         # Výpočet kumulativního nárůstu na jednotku
         cum_multipliers = multipliers.cumprod().shift()
         cum_multipliers = cum_multipliers.fillna(1.0)
@@ -70,10 +88,6 @@ class Position:
         # Převod na dataframe
         prices = prices.to_frame(name="Close")
 
-        clean_date_str = date.strftime('%Y-%m-%d')
-
-        plot_price(prices, date, f"{self._name} {clean_date_str} transaction price growth graph")
-        
         # Vrátí data růstu z dané transakce jako dataframe
         return prices
 
@@ -98,6 +112,7 @@ class Position:
         for i in range(1, len(growth_list)):
 
             position_history = position_history.add(growth_list[i], fill_value=0)
+
         position_history.to_csv(f'DATA/{self._ticker}.position.history.csv')
         return position_history
         
@@ -135,16 +150,14 @@ class Position:
         if self.get_earliest_record_date() < date:
             
             # Zjistit High a Low daného dne a zkontrolovat že jsme uvnitř
-            low = self._daily_history.loc[date, "Low"]
-            high = self._daily_history.loc[date, "High"]
+            nearest_row = self._daily_history.asof(date).name
+            low = self._daily_history.loc[nearest_row, "Low"]
+            high = self._daily_history.loc[nearest_row, "High"]
             if not low <= price <= high:
                 print(f"[red]!!! Cena {self._name} mimo denní rozsah!!![/red] platný rozsah: low: {low}, price: {price}, high: {high}")
         else:
             
-            print(f"[red]!!!Pozor, v datu {date.date()} transakce {self._name} ještě není záznam cen!!![/red] první datum záznamu: {self.get_earliest_record_date().date()}")
-
-            # Vzít oživatelem zadanou hodnotu a zapsat jí do chybějícího pole v hiustorii (uživatel nikdy nelže, apple se prostě prodával v roce 1560 za 20 USD)
-            self._rig_history(date, price)
+            print(f"[red]!!!Pozor, v datu {date} transakce {self._name} ještě není záznam cen!!![/red] první datum záznamu: {self.get_earliest_record_date()}")
 
             # Reindexovat záznam do posledního nejzazšího potřebného data (hodnoty budou NaN)
             self._fill_history_data()
@@ -170,7 +183,8 @@ class Portfolio:
         return self._position_dict[ticker]
         
     def transaction(self, price: float, amount: int, date: datetime, asset: Asset):
-        
+        asset = asset
+        date = date.date()
         if asset.get_ticker() not in self._position_dict:
             self._position_dict[asset.get_ticker()] = Position(price, date, asset=asset,amount=amount)
         else:
@@ -179,14 +193,15 @@ class Portfolio:
 
 portfolio = Portfolio()
 
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,1), amount=1,price=100)
+#portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,1), amount=1,price=100)
 #portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2015,1,1), amount=1,price=100)
-#portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,1,1), amount=1,price=100)
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,1,1), amount=1,price=51)
 #portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2025,1,1), amount=1,price=100)
 portfolio.transaction(asset=Stock("aapl"), date=datetime(1970,12,16), amount=1,price=100)
-portfolio.transaction(asset=Stock("aapl"), date=datetime(1980,12,16), amount=1,price=0.08641161024570465)
-portfolio.transaction(asset=Commodity("XPTUSD"), date=datetime(2024,8,13), amount=4,price=600)
-portfolio.transaction(asset=Commodity("XPLUSD"), date=datetime(2024,8,13), amount=4,price=600)
+#portfolio.transaction(asset=Stock("aapl"), date=datetime(1980,12,16), amount=1,price=0.08641161024570465)
+#portfolio.transaction(asset=Commodity("XPTUSD"), date=datetime(2024,8,13), amount=4,price=600)
+#portfolio.transaction(asset=Commodity("XPLUSD"), date=datetime(2024,8,13), amount=4,price=600)
+portfolio.transaction(asset=Commodity("XAUUSD"), date=datetime(2015,12,16), amount=1,price=100)
 
 #print(portfolio.get_position("VUSA.AS"))
 #print(portfolio)
@@ -201,6 +216,7 @@ portfolio.transaction(asset=Commodity("XPLUSD"), date=datetime(2024,8,13), amoun
 #pp.pprint(portfolio.get_position("VUSA.AS")._create_transation_history(date))
 #pp.pprint(portfolio.get_position("VUSA.AS").get_position_history())
 portfolio.get_position("VUSA.AS").plot_price()
+portfolio.get_position("XAUUSD").plot_price()
 #pp.pprint(portfolio.get_position("AAPL").get_position_history())
 portfolio.get_position("AAPL").plot_price()
 

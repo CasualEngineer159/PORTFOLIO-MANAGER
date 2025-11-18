@@ -73,12 +73,12 @@ def _delete_outliers(stock_history) -> pd.DataFrame:
     outlier_index_growth = stock_history[outlier_mask_growth].index.tolist()
     outlier_index_fall = stock_history[outlier_mask_fall].index.tolist()
 
-    print(f"\nIndexy, kde je chyba podle z threshold: {outlier_index_growth}")
-    print(f"\nIndexy, kde je chyba podle z threshold: {outlier_index_fall}")
+    #print(f"\nIndexy, kde je chyba podle z threshold: {outlier_index_growth}")
+    #print(f"\nIndexy, kde je chyba podle z threshold: {outlier_index_fall}")
 
     # Vytvoření párů pro vymazání
     pairs = list(zip(outlier_index_growth, outlier_index_fall))
-    print(f"\nNalezeny tyto chybné bloky (páry): {pairs}")
+    #print(f"\nNalezeny tyto chybné bloky (páry): {pairs}")
 
     # Pokud je list pairs prázdný, vrátíme předčasně
     if not pairs:
@@ -93,6 +93,33 @@ def _delete_outliers(stock_history) -> pd.DataFrame:
 
     # Vrátí dataframe se smazanými outliery
     return stock_history
+
+def _fill_gaps(stock_history) -> pd.DataFrame:
+
+    # Vytvoření úplné datové řady pro danou hystorii
+    full_date_range = pd.date_range(
+        start=stock_history.index.min(),
+        end=datetime.now().date(),
+        freq='D'  # Frekvence 'D' znamená denní
+    )
+    full_date_range.name = 'Date'
+
+    # Doplnění prázdných polí sloupce "Close" předchozí hodnotou
+    close_prices = stock_history[['Close']]
+    stock_history_filled = close_prices.reindex(full_date_range).ffill()
+
+    # Zachování doplněného sloupce min
+    daily_min = stock_history[["Low"]].reindex(full_date_range).ffill()
+    daily_min.name = 'Low'
+    stock_history_filled['Low'] = daily_min
+
+    # Zachování doplněného sloupce max
+    daily_max = stock_history[["High"]].reindex(full_date_range).ffill()
+    daily_max.name = 'High'
+    stock_history_filled['High'] = daily_max
+
+    # Vrátí plně upravená data připravené k použití v grafu
+    return stock_history_filled
 
 # Vrátí plně upravená data připravené k použití v grafu
 def _normalize_history(stock_history) -> pd.DataFrame:
@@ -118,36 +145,14 @@ def _normalize_history(stock_history) -> pd.DataFrame:
     # Odstranění mezery mezi prvním a druhým záznamem (vzniké filtrací)
     stock_history = _close_initial_gap(stock_history)
 
-    # Vytvoření úplné datové řady pro danou hystorii
-    full_date_range = pd.date_range(
-        start=stock_history.index.min(),
-        end=datetime.now().date(),
-        freq='D'  # Frekvence 'D' znamená denní
-    )
-    full_date_range.name = 'Date'
-
-    # Doplnění prázdných polí sloupce "Close" předchozí hodnotou
-    close_prices = stock_history[['Close']]
-    stock_history_filled = close_prices.reindex(full_date_range).ffill()
-
     # Vytvoření sloupce s denním procentuálním přírůstkem
-    daily_returns = stock_history_filled['Close'].pct_change()
+    daily_returns = stock_history['Close'].pct_change()
     daily_returns.name = 'return'
-    stock_history_filled['return'] = daily_returns
+    stock_history['return'] = daily_returns
 
-    # Zachování doplněného sloupce min
-    daily_min = stock_history[["Low"]].reindex(full_date_range).ffill()
-    daily_min.name = 'Low'
-    stock_history_filled['Low'] = daily_min
+    stock_history.index.name = 'Date'
 
-    # Zachování doplněného sloupce max
-    daily_max = stock_history[["High"]].reindex(full_date_range).ffill()
-    daily_max.name = 'High'
-    stock_history_filled['High'] = daily_max
-
-    # Vrátí plně upravená data připravené k použití v grafu
-    return stock_history_filled
-
+    return stock_history
 
 class DownloadManager:
     
@@ -171,6 +176,9 @@ class DownloadManager:
                 parse_dates=True
             )
             #print(f"✅ Historie pro {self._ticker} načtena z CSV.")
+
+            stock_history.index = stock_history.index.date
+
             return stock_history
         except FileNotFoundError:
             #print(f"❌ Chyba: Soubor historie nebyl nalezen na cestě: {file_path}")
@@ -212,8 +220,8 @@ class DownloadManager:
         self._ticker = ticker
         history = self._load_daily_history()
         #print(f"Poslední BDay: {get_last_business_day()}, poslední datum staženo: {history.index.max().date()}")
-        if history.empty or get_last_business_day() > history.index.max().date():
-            #print("Tady probíhá stahování")
+        if history.empty or get_last_business_day() > history.index.max():
+            #print(f"Tady probíhá stahování {self._ticker}")
             history = self._download_daily_history()
 
         return history
@@ -229,12 +237,12 @@ class YfinanceManager(DownloadManager):
         return super().get_info(ticker)
         
     def _download_daily_history(self) -> pd.DataFrame:
-        print(f"stahujeme historii {self._ticker}")
+        #print(f"stahujeme historii {self._ticker}")
 
         # Stažení dat z Yahoo
         stock_history = self._yahoo_ticker.history(period="max", interval="1d")
         
-        pp.pprint(stock_history.head())
+        #pp.pprint(stock_history.head())
 
         # Úprava dat
         stock_history = _normalize_history(stock_history)
