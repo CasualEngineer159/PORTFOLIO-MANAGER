@@ -211,7 +211,9 @@ class DownloadManager:
     def get_history(self, ticker) -> pd.DataFrame:
         self._ticker = ticker
         history = self._load_daily_history()
+        #print(f"Poslední BDay: {get_last_business_day()}, poslední datum staženo: {history.index.max().date()}")
         if history.empty or get_last_business_day() > history.index.max().date():
+            #print("Tady probíhá stahování")
             history = self._download_daily_history()
 
         return history
