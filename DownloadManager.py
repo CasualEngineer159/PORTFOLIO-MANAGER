@@ -94,7 +94,7 @@ def _delete_outliers(stock_history) -> pd.DataFrame:
     # Vrátí dataframe se smazanými outliery
     return stock_history
 
-def _fill_gaps(stock_history) -> pd.DataFrame:
+def fill_gaps(stock_history) -> pd.DataFrame:
 
     # Vytvoření úplné datové řady pro danou hystorii
     full_date_range = pd.date_range(

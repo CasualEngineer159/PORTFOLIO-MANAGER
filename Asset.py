@@ -43,6 +43,9 @@ class Asset:
     def get_name(self) -> str:
         return self._name
 
+    def get_currency(self) -> str:
+        return self._stock_info.get("currency", "USD")
+
     def get_earliest_record_date(self) -> datetime:
         self._daily_history.sort_index()
         return self._daily_history.index[0]
@@ -52,7 +55,6 @@ class Asset:
 
     def get_prices(self, start_date) -> pd.DataFrame:
         self._daily_history.sort_index()
-        #print(f"get_prices index type: {type(self._daily_history.index[0])} \nstart_date: {type(start_date)}")
         nearest_row = self._daily_history.asof(start_date).name
         return self._daily_history.loc[nearest_row:].copy()
 
@@ -69,6 +71,9 @@ class Commodity(Asset):
         super().__init__(ticker)
         #print(self._name)
 
+    def get_currency(self) -> str:
+        currency = self._ticker[-3:]
+        return currency
 
 class Crypto(Asset):
     def __init__(self, ticker):
@@ -83,10 +88,19 @@ class ETF(Asset):
         super().__init__(ticker)
         #print(self._name)
 
-
 class Futures(Asset):
     def __init__(self, ticker):
         self.manager = yfinance_m
         super().__init__(ticker)
         self._name = self._stock_info.get("shortName", self._ticker)
         #print(self._name)
+
+class Forex(Asset):
+    def __init__(self, ticker):
+        self.manager = yfinance_m
+        super().__init__(ticker)
+
+    def get_prices(self, start_date) -> pd.DataFrame:
+        self._daily_history.sort_index()
+        self._daily_history = fill_gaps(self._daily_history)
+        return self._daily_history.loc[start_date:].copy()
