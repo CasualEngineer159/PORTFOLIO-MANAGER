@@ -119,10 +119,7 @@ class Position:
             position_history = position_history.add(growth_list[i], fill_value=0)
 
         # Vytvoření sloupce s denním procentuálním přírůstkem
-        daily_returns = position_history['Close'].pct_change()
-        daily_returns.name = 'return'
-        position_history['return'] = daily_returns
-        position_history.iloc[0] = 1
+        daily_returns = position_history['Close'].pct_change() + 1
 
         position_history.to_csv(f'DATA/{self._ticker}.position.history.csv')
 
@@ -187,6 +184,41 @@ class Portfolio:
             item.print_overview()
         return ""
 
+    def _add_positions(self):
+
+        self._portfolio_history = pd.DataFrame({})
+
+        self._portfolio_history["Close"] = {}
+        self._portfolio_history["Return"] = {}
+
+        position = pd.DataFrame({})
+
+        for key in self._position_prices.keys():
+
+            #pp.pprint(key)
+
+            position = self._position_prices[key]
+
+            #pp.pprint(position)
+
+            self._portfolio_history["Close"] = self._portfolio_history["Close"].add(position["Close"], fill_value=0)
+
+        pp.pprint(f"První tisk:")
+        pp.pprint(self._portfolio_history)
+
+        for key in self._position_prices.keys():
+
+            position = self._position_prices[key]
+
+            position_weight = position["Close"] / self._portfolio_history["Close"]
+            position["Weighted_change"] = position["returns"] * position_weight
+
+            self._portfolio_history["Return"] = self._portfolio_history["Return"].add(position["Weighted_change"], fill_value=0)
+
+        pp.pprint(f"Druhý tisk:")
+        pp.pprint(self._portfolio_history)
+
+
     def _create_position_prices(self):
 
         self._create_currency_list()
@@ -198,7 +230,7 @@ class Portfolio:
 
             # Převod na měnu Portfolia
             prices = position.get_position_history().loc[:, "Close"]
-            returns = position.get_position_history().loc[:, "return"]
+            returns = position.get_position_history().loc[:, "Return"]
             currency = position.get_currency()
 
             if not (currency == self._currency):
@@ -211,10 +243,15 @@ class Portfolio:
                 prices = prices * forex_prices
 
             position_prices = pd.DataFrame(prices)
-            position_prices["return"] = returns
-            self._position_prices[item] = [position_prices]
+            position_prices.index.name = "Date"
+            position_prices["returns"] = returns
 
-        print(self._position_prices)
+            self._position_prices[item] = position_prices
+
+
+        #pp.pprint(self._position_prices["VUSA.AS"])
+
+        self._position_prices["VUSA.AS"].to_csv("DATA/pokus co to udela")
 
     def _create_currency_list(self):
 
@@ -248,6 +285,7 @@ class Portfolio:
 portfolio = Portfolio("EUR")
 
 portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,1), amount=1,price=27.7)
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,3), amount=100,price=27.7)
 portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2015,1,1), amount=1,price=27.7)
 portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,1,1), amount=1,price=51)
 portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2025,1,1), amount=1,price=108)
@@ -264,7 +302,7 @@ portfolio.transaction(asset=Stock("IE00BD3RYZ16"), date=datetime(2015,12,16), am
 
 #gold.plot_closing_price()
 #snp.plot_closing_price()
-#apple.plot_closing_price()
+#apple.plot_closing_price()SSS
 
 #portfolio.get_position("VUSA.AS").create_position_history()
 #print(date)
@@ -281,3 +319,5 @@ om3x = ETF("OM3X.DE")
 GBPUSD_X = Forex("GBPUSD=X")
 
 portfolio._create_position_prices()
+
+portfolio._add_positions()
