@@ -1,7 +1,7 @@
 import csv
 from DownloadManager import *
 
-ticker = 'VUSA.AS'
+ticker = 'XAU/USD'
 
 with open("API.json", 'r', encoding='utf-8') as f:
     API = json.load(f)
@@ -20,13 +20,6 @@ url = ("https://api.twelvedata.com/time_series?"
 r = requests.get(url)
 stock_history = pd.read_csv(io.StringIO(r.text))
 
+ticker = ticker.replace('/','')
+
 stock_history.to_csv(f'DATA/{ticker}.test.history.csv')
-
-file_path = f'DATA/Transactions.csv'
-
-transactions = pd.read_csv(
-    file_path,
-    index_col="Datum",
-    parse_dates=True,
-    sep=','
-)

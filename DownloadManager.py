@@ -248,7 +248,7 @@ class YfinanceManager(DownloadManager):
         stock_history = _normalize_history(stock_history)
 
         # Zápis do souboru
-        stock_history.to_csv(f'DATA/{self._ticker}.history.csv')
+        stock_history.to_csv(f'DATA/{self.get_ticker(self._ticker)}.history.csv')
         return stock_history
 
     def _download_stock_info(self) -> dict:
@@ -267,7 +267,7 @@ class YfinanceManager(DownloadManager):
         return yf.Ticker(ticker).ticker
     
 class AlphaVantage(DownloadManager):
-    
+
     def __init__(self):
         super().__init__()
 
@@ -278,14 +278,15 @@ class AlphaVantage(DownloadManager):
     def _download_daily_history(self) -> pd.DataFrame:
         print("Stahujeme z AlphaVantage")
 
+        self._ticker = self._ticker.replace('/', '')
+
         # Vytvoření url pro API dotaz
         base_url = 'https://www.alphavantage.co/query'
         params = {
-            'function': 'TIME_SERIES_DAILY',
+            'function': 'TIME_SERIES_WEEKLY',
             'symbol': self._ticker,
             'apikey': self.API['AlphaVantage'],
-            "datatype" : "csv",
-            "outputsize" : "full"
+            "datatype" : "csv"
         }
 
         # Dotaz na API
@@ -331,4 +332,33 @@ class AlphaVantage(DownloadManager):
         stock_history.to_csv(f'DATA/{self._ticker}.history.csv')
         return stock_history
 
-    
+class TwelveData(DownloadManager):
+
+    def __init__(self):
+        super().__init__()
+
+        # Načtení API klíče z tajného json souboru
+        with open("API.json", 'r', encoding='utf-8') as f:
+            self.API = json.load(f)
+
+    def _download_daily_history(self) -> pd.DataFrame:
+
+        self._ticker_replaced = self._ticker.replace('/', '')
+
+        url = ("https://api.twelvedata.com/time_series?"
+               f"apikey={self.API["Twelvedata"]}&"
+               f"symbol={self._ticker}&"
+               "interval=1day&"
+               "format=CSV&"
+               "previous_close=false&"
+               "timezone=Europe/Prague&"
+               "start_date=1980-11-10&"
+               )
+
+        # Dotaz na API
+        r = requests.get(url)
+        stock_history = pd.read_csv(io.StringIO(r.text))
+
+        stock_history.to_csv(f'DATA/{self._ticker_replaced}.test.history.twelve.csv')
+
+

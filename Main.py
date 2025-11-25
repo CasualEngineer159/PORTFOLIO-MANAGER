@@ -7,7 +7,6 @@ snp = ETF("VUSA.AS")
 apple = Stock("US67066G1040")
 Apple = Stock("aapl")
 bitcoin = Crypto("BTC-USD")
-gold = Commodity("XAUUSD")
 gold_futures = Futures("GC=F")
 
 class Position:
@@ -121,6 +120,8 @@ class Position:
         # Vytvoření sloupce s denním procentuálním přírůstkem
         daily_returns = position_history['Close'].pct_change() + 1
 
+        position_history["Return"] = self._asset.get_prices(self._get_first_buy_date()).loc[:, "return"]
+
         position_history.to_csv(f'DATA/{self._ticker}.position.history.csv')
 
         #self.plot_price()
@@ -215,8 +216,12 @@ class Portfolio:
 
             self._portfolio_history["Return"] = self._portfolio_history["Return"].add(position["Weighted_change"], fill_value=0)
 
+        self._portfolio_history["Return"] = self._portfolio_history["Return"].cumprod().shift()
+
         pp.pprint(f"Druhý tisk:")
         pp.pprint(self._portfolio_history)
+
+        plot_price(self._portfolio_history,self.get_earliest_record_date(),"Plot returnů portfolia", "Return")
 
 
     def _create_position_prices(self):
@@ -267,8 +272,8 @@ class Portfolio:
         first_dates = []
         for item in self._position_dict.values():
             first_dates.append(item.get_earliest_record_date())
-        print(max(first_dates).date())
-        return max(first_dates).date()
+        print(max(first_dates))
+        return max(first_dates)
         
     def get_position(self, ticker) -> Position:
         return self._position_dict[ticker]
@@ -291,9 +296,6 @@ portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,1,1), amount=1,pr
 portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2025,1,1), amount=1,price=108)
 portfolio.transaction(asset=Stock("aapl"), date=datetime(1970,12,16), amount=1,price=100)
 portfolio.transaction(asset=Stock("aapl"), date=datetime(1980,12,16), amount=1,price=0.0865)
-portfolio.transaction(asset=Commodity("XPTUSD"), date=datetime(2024,8,13), amount=4,price=940)
-portfolio.transaction(asset=Commodity("XPLUSD"), date=datetime(2024,8,13), amount=4,price=600)
-portfolio.transaction(asset=Commodity("XAUUSD"), date=datetime(2015,12,16), amount=1,price=100)
 portfolio.transaction(asset=Stock("IE00BD3RYZ16"), date=datetime(2015,12,16), amount=1, price=100)
 
 #print(portfolio.get_position("VUSA.AS"))
@@ -321,3 +323,5 @@ GBPUSD_X = Forex("GBPUSD=X")
 portfolio._create_position_prices()
 
 portfolio._add_positions()
+
+

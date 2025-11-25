@@ -3,12 +3,13 @@ from DownloadManager import *
 
 yfinance_m = YfinanceManager()
 aplha_vantage_m = AlphaVantage()
+twelve_data_m = TwelveData()
 
 
-def plot_price(history, date, plot_name):
+def plot_price(history, date, plot_name, column):
     plt.figure(figsize=(10, 6))
 
-    history_to_plot = history.loc[date:, ["Close"]]
+    history_to_plot = history.loc[date:, [column]]
 
     # Reindexuje pro správné vykreselní
     history_to_plot = history_to_plot.asfreq('D')
@@ -67,13 +68,9 @@ class Stock(Asset):
 
 class Commodity(Asset):
     def __init__(self, ticker):
-        self.manager = aplha_vantage_m
+        self.manager = yfinance_m
         super().__init__(ticker)
         #print(self._name)
-
-    def get_currency(self) -> str:
-        currency = self._ticker[-3:]
-        return currency
 
 class Crypto(Asset):
     def __init__(self, ticker):
