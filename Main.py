@@ -39,7 +39,7 @@ class Position:
 
     
     # Vrátí data růstu z dané transakce
-    def _create_transaction_history(self, date) -> pd.DataFrame:
+    def _create_transaction_history(self, date):
 
         # Získání informací o pozici
         amount = self._position_changes[date][0]
@@ -70,7 +70,7 @@ class Position:
         new_index = daily_history_copy.index.union([date])
         re_indexed_series = daily_history_copy['return'].reindex(new_index, method='bfill')
         multipliers = 1 + re_indexed_series.loc[date:].copy(deep=True)
-        multipliers.iloc[0] = intraday_change + 1
+        multipliers.iloc[0] = intraday_change
 
         if date < self._asset.get_earliest_record_date():
             multipliers.iloc[1] = 1
@@ -85,9 +85,10 @@ class Position:
 
         # Převod na dataframe
         prices = prices.to_frame(name="Close")
+        multipliers = multipliers.to_frame(name="Return")
 
         # Vrátí data růstu z dané transakce jako dataframe
-        return prices
+        return prices, multipliers
 
     def plot_price(self):
         plot_price(self.get_position_history(), self._get_first_buy_date(), f"{self._name} position price growth graph", "Close")
@@ -95,11 +96,13 @@ class Position:
     def get_position_history(self) -> pd.DataFrame:
         
         growth_list = []
+        return_list = []
         
         for date in self._position_changes.keys():
             
-            transaction_df = self._create_transaction_history(date)
-            growth_list.append(transaction_df)
+            prices, returns = self._create_transaction_history(date)
+            growth_list.append(prices)
+            return_list.append(returns)
             
         if not growth_list:
             
@@ -110,6 +113,22 @@ class Position:
         for i in range(1, len(growth_list)):
 
             position_history = position_history.add(growth_list[i], fill_value=0)
+
+        position_returns = 0
+
+        for i in range(1, len(growth_list)):
+
+            transaction_weight = (growth_list[i] / position_history) * -1
+            transaction_weight = transaction_weight.fillna(1)
+
+            transaction_return = transaction_weight["Close"] * return_list[i]["Return"]
+            print("Transaction return:")
+            pp.pprint(transaction_return)
+
+            position_returns = position_returns + transaction_return
+
+        pp.pprint(f"position_returns: ")
+        pp.pprint(position_returns)
 
         position_history["Return"] = self._asset.get_prices(self._get_first_buy_date()).loc[:, "return"]
 
@@ -304,8 +323,8 @@ portfolio = Portfolio("EUR")
 #portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,1), amount=1,price=27.7)
 #portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,3), amount=100,price=27.7)
 #portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2015,1,1), amount=1,price=27.7)
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,1,1), amount=1,price=50.99663543701172)
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,5,19), amount=1,price=48.06216812133789)
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,1,1), amount=1,price=150)
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,1,5), amount=2,price=48.06216812133789)
 #portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2025,1,1), amount=1,price=108)
 #portfolio.transaction(asset=Stock("aapl"), date=datetime(1970,12,16), amount=1,price=100)
 #portfolio.transaction(asset=Stock("aapl"), date=datetime(1980,12,16), amount=1,price=0.0865)
