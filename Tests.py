@@ -1,25 +1,29 @@
-import csv
-from DownloadManager import *
+import pandas as pd
+from datetime import datetime
 
-ticker = 'XAU/USD'
+print("--- 1. PŘÍPRAVA DAT ---")
+# Vytvoříme data jen pro obchodní dny (vynecháme 1.1. jako svátek a 4.1.-5.1. jako víkend)
+dates = [
+    datetime(2019, 12, 31),  # Úterý
+    datetime(2020, 1, 2),  # Čtvrtek (1.1. burza zavřená)
+    datetime(2020, 1, 3),  # Pátek
+    datetime(2020, 1, 6)  # Pondělí (4. a 5. byl víkend)
+]
 
-with open("API.json", 'r', encoding='utf-8') as f:
-    API = json.load(f)
+# Vytvoření DataFrame
+df = pd.DataFrame({
+    'Low': [148.0, 150.0, 155.0, 152.0],
+    'High': [155.0, 158.0, 160.0, 159.0]
+}, index=dates)
 
-url = ("https://api.twelvedata.com/time_series?"
-       f"apikey={API["Twelvedata"]}&"
-       f"symbol={ticker}&"
-       "interval=1day&"
-       "format=CSV&"
-       "previous_close=false&"
-       "timezone=Europe/Prague&"
-       "start_date=1980-11-10&"
-       )
+# Ujistíme se, že index je seřazený (nutné pro asof/ffill)
+df = df.sort_index()
+print("Data v 'daily_history':")
+print(df)
+print("-" * 30)
 
-# Dotaz na API
-r = requests.get(url)
-stock_history = pd.read_csv(io.StringIO(r.text))
+date = datetime(2020, 1, 1)
+print(f"date = {date}")
+nearest_row = df.index.asof(date)
+print(nearest_row)
 
-ticker = ticker.replace('/','')
-
-stock_history.to_csv(f'DATA/{ticker}.test.history.csv')

@@ -56,7 +56,9 @@ class Asset:
 
     def get_prices(self, start_date) -> pd.DataFrame:
         self._daily_history.sort_index()
-        nearest_row = self._daily_history.asof(start_date).name
+        nearest_row = self._daily_history.index.asof(start_date)
+        if pd.isna(nearest_row):
+            return self._daily_history.copy()
         return self._daily_history.loc[nearest_row:].copy()
 
 

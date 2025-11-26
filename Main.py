@@ -3,12 +3,6 @@ import pandas as pd
 from Asset import *
 from rich import print
 
-snp = ETF("VUSA.AS")
-apple = Stock("US67066G1040")
-Apple = Stock("aapl")
-bitcoin = Crypto("BTC-USD")
-gold_futures = Futures("GC=F")
-
 class Position:
     
     def __init__(self, price: float, date: datetime, asset: Asset, amount: int):
@@ -70,6 +64,7 @@ class Position:
 
         # Výpočet procentuálního rozdílu nákupní ceny od poslední obchodované toho dne
         intraday_change = (closing_price - price) / price
+        print(intraday_change)
 
         # Převedení daily_change na procenta
         new_index = daily_history_copy.index.union([date])
@@ -83,9 +78,8 @@ class Position:
         #pp.pprint(multipliers)
 
         # Výpočet kumulativního nárůstu na jednotku
-        cum_multipliers = multipliers.cumprod().shift()
-        cum_multipliers = cum_multipliers.fillna(1.0)
-        
+        cum_multipliers = multipliers.cumprod()
+
         # Výpočet celkového růstu pozice
         prices = price * amount * cum_multipliers
 
@@ -96,7 +90,7 @@ class Position:
         return prices
 
     def plot_price(self):
-        plot_price(self.get_position_history(), self._get_first_buy_date(), f"{self._name} position price growth graph")
+        plot_price(self.get_position_history(), self._get_first_buy_date(), f"{self._name} position price growth graph", "Close")
 
     def get_position_history(self) -> pd.DataFrame:
         
@@ -117,10 +111,10 @@ class Position:
 
             position_history = position_history.add(growth_list[i], fill_value=0)
 
-        # Vytvoření sloupce s denním procentuálním přírůstkem
-        daily_returns = position_history['Close'].pct_change() + 1
-
         position_history["Return"] = self._asset.get_prices(self._get_first_buy_date()).loc[:, "return"]
+
+        #print(f"Tisk {self._ticker} unvitř get_position_history")
+        #pp.pprint(position_history.head())
 
         position_history.to_csv(f'DATA/{self._ticker}.position.history.csv')
 
@@ -160,11 +154,10 @@ class Position:
         # Pokud existuje záznam, zkontrolovat jestli je cena v platném rozsahu a když ne hodit výstrahu uživateli
         # Pokud záznam neexistuje, hodit výstrahu a reindexovat historii
         if self.get_earliest_record_date() < date:
-            
+
             # Zjistit High a Low daného dne a zkontrolovat že jsme uvnitř
-            nearest_row = self._daily_history.asof(date).name
-            low = self._daily_history.loc[nearest_row, "Low"]
-            high = self._daily_history.loc[nearest_row, "High"]
+            low = self._daily_history.asof(date).loc["Low"]
+            high = self._daily_history.asof(date).loc["High"]
             if not low <= price <= high:
                 print(f"[red]!!! Cena {self._name} mimo denní rozsah!!![/red] platný rozsah: low: {low}, price: {price}, high: {high}")
         else:
@@ -196,32 +189,56 @@ class Portfolio:
 
         for key in self._position_prices.keys():
 
-            #pp.pprint(key)
-
             position = self._position_prices[key]
+
+            # Reindexuje na každý den a doplní chybějící hodnoty Close
+            position = position.asfreq('D')
+            position["Close"] = position["Close"].ffill()
 
             #pp.pprint(position)
 
             self._portfolio_history["Close"] = self._portfolio_history["Close"].add(position["Close"], fill_value=0)
 
-        pp.pprint(f"První tisk:")
-        pp.pprint(self._portfolio_history)
-
         for key in self._position_prices.keys():
 
             position = self._position_prices[key]
+            position = position.asfreq('D')
+
+            #pp.pprint(f"position {key}:")
+            #pp.pprint(position)
 
             position_weight = position["Close"] / self._portfolio_history["Close"]
+
+            #pp.pprint(f"position_weight {key}:")
+            #pp.pprint(position_weight)
+
             position["Weighted_change"] = position["returns"] * position_weight
+
+            pp.pprint(f"Weighted_change 25.11.2025 {key}:")
+            pp.pprint(position.loc[datetime(2025,11,25),"Weighted_change"])
 
             self._portfolio_history["Return"] = self._portfolio_history["Return"].add(position["Weighted_change"], fill_value=0)
 
-        self._portfolio_history["Return"] = self._portfolio_history["Return"].cumprod().shift()
+            pp.pprint(self._portfolio_history)
+
+            pp.pprint(f"Weighted_change součet 25.11.2025 {key}:")
+            pp.pprint(self._portfolio_history.loc[datetime(2025,11,25),"Return"])
+
+        #self._portfolio_history["Return"] = self._portfolio_history["Return"].cumprod().shift()
+
+        self._portfolio_history["Return"] = self._portfolio_history["Return"] + 1
+        self._portfolio_history.iloc[0, self._portfolio_history.columns.get_loc("Return")] = 1
+        self._portfolio_history["Growth"] = self._portfolio_history["Return"].cumprod()
 
         pp.pprint(f"Druhý tisk:")
         pp.pprint(self._portfolio_history)
 
-        plot_price(self._portfolio_history,self.get_earliest_record_date(),"Plot returnů portfolia", "Return")
+        first_date = self._portfolio_history.iloc[0].name
+
+        self._portfolio_history.to_csv(f'DATA/portfolio.history.csv')
+
+        plot_price(self._portfolio_history,first_date,"Plot growth portfolia", "Growth")
+        plot_price(self._portfolio_history, first_date, "Plot price portfolia", "Close")
 
 
     def _create_position_prices(self):
@@ -252,11 +269,6 @@ class Portfolio:
             position_prices["returns"] = returns
 
             self._position_prices[item] = position_prices
-
-
-        #pp.pprint(self._position_prices["VUSA.AS"])
-
-        self._position_prices["VUSA.AS"].to_csv("DATA/pokus co to udela")
 
     def _create_currency_list(self):
 
@@ -289,14 +301,15 @@ class Portfolio:
 
 portfolio = Portfolio("EUR")
 
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,1), amount=1,price=27.7)
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,3), amount=100,price=27.7)
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2015,1,1), amount=1,price=27.7)
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,1,1), amount=1,price=51)
-portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2025,1,1), amount=1,price=108)
-portfolio.transaction(asset=Stock("aapl"), date=datetime(1970,12,16), amount=1,price=100)
-portfolio.transaction(asset=Stock("aapl"), date=datetime(1980,12,16), amount=1,price=0.0865)
-portfolio.transaction(asset=Stock("IE00BD3RYZ16"), date=datetime(2015,12,16), amount=1, price=100)
+#portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,1), amount=1,price=27.7)
+#portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2010,1,3), amount=100,price=27.7)
+#portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2015,1,1), amount=1,price=27.7)
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,1,1), amount=1,price=50.99663543701172)
+portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2020,5,19), amount=1,price=48.06216812133789)
+#portfolio.transaction(asset=ETF("VUSA.AS"), date=datetime(2025,1,1), amount=1,price=108)
+#portfolio.transaction(asset=Stock("aapl"), date=datetime(1970,12,16), amount=1,price=100)
+#portfolio.transaction(asset=Stock("aapl"), date=datetime(1980,12,16), amount=1,price=0.0865)
+#portfolio.transaction(asset=Stock("IE00BD3RYZ16"), date=datetime(2015,12,16), amount=1, price=100)
 
 #print(portfolio.get_position("VUSA.AS"))
 #print(portfolio)
