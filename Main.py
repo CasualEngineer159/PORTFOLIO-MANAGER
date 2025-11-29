@@ -1,5 +1,3 @@
-import pandas as pd
-
 from Asset import *
 from rich import print
 
