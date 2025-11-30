@@ -1,10 +1,4 @@
-from idlelib import history
-
-from matplotlib import dates
-
-from Asset import *
 from rich import print
-from enum import IntEnum
 from Transaction import *
 
 class Portfolio:
@@ -20,7 +14,7 @@ class Portfolio:
         self._portfolio_prices = create_dataframe_from_date(self._first_date)
 
     # Vytvoření nové transakce - vytvření/přiřazení pozice
-    def new_long_transaction(self, date: datetime, asset: Asset, amount: int = None, price: float = None, fraction: bool = False):
+    def new_transaction(self, transaction_type: TransactionType, date: datetime, asset: Asset,currency: str = None, amount: int = None, price: float = None):
 
         # Odstranění času z data
         date = date.date()
@@ -29,11 +23,7 @@ class Portfolio:
         if asset not in self._position_dict.keys():
             self._position_dict[asset] = Position(asset)
 
-        # Vytvoření transakce v dané pozici
-        if not fraction:
-            self._position_dict[asset].new_transaction(amount, date, TransactionType.LONG, price)
-        else:
-            self._position_dict[asset].new_transaction(amount, date, TransactionType.FRACTION_LONG, price)
+        self._position_dict[asset].new_transaction(amount, date, transaction_type, currency, price)
 
     # Zjistí datum první transakce
     def _create_first_date(self):
@@ -78,7 +68,7 @@ class Portfolio:
         self._create_portfolio_prices()
         self._add_positions()
         self._calculate_growth()
-        if real is True:
+        if real:
             self._portfolio_prices = self._portfolio_prices[self._portfolio_prices["Mask"]]
         self.plot_price(real)
         print(self._portfolio_prices)
@@ -89,9 +79,6 @@ class Portfolio:
         plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf ceny {self._currency} {real}", "Price")
         plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf profitu {self._currency} {real}", "Profit")
         plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf báze {self._currency} {real}", "Base")
-
-long_transaction_factory = LongTransactionPrepper()
-long_fraction_transaction_factory = LongFractionTransactionPrepper()
 
 class Position:
     def __init__(self, asset: Asset):
@@ -115,26 +102,36 @@ class Position:
         self._position_prices = create_dataframe_from_date(self._first_date)
 
     # Vytvoření nového objektu transakce a zařazení do listu transakcí
-    def new_transaction(self, amount: int, date: datetime,transaction_type: TransactionType, price: float = None):
+    def new_transaction(self, amount: int, date: datetime,transaction_type: TransactionType, currency, price: float = None):
 
-        transaction, amount_bought = None, None
+        price = price
+        if not (self._currency == currency) and price is not None and currency is not None:
+            forex = forex_creator(from_currency=currency, to_currency=self._currency)
+            rate = forex.get_rate(date)
+            #print(f"price: {price}, rate: {rate}")
+            #price = price * rate
+
+        transaction = None
 
         if transaction_type == TransactionType.LONG:
-            transaction, amount_bought = long_transaction_factory.new_transaction(asset=self._asset,
-                                                                                  date=date,
-                                                                                  amount=amount,
-                                                                                  price=price,
-                                                                                  amount_owned=self._amount)
+            transaction = LongTransaction(asset=self._asset,
+                                          date=date,
+                                          amount=amount,
+                                          price=price,
+                                          amount_owned=self._amount)
 
         elif transaction_type == TransactionType.FRACTION_LONG:
-            transaction, amount_bought = long_fraction_transaction_factory.new_transaction(asset=self._asset,
-                                                                                  date=date,
-                                                                                  amount=amount,
-                                                                                  price=price,
-                                                                                  amount_owned=self._amount)
+            transaction = LongFractionTransaction(asset=self._asset,
+                                                  date=date,
+                                                  amount=amount,
+                                                  price=price,
+                                                  amount_owned=self._amount)
+
         self._transaction_list.append(transaction)
+        amount_bought = transaction.get_amount()
+        print(amount_bought)
         self._amount = self._amount + amount_bought
-        print(f"new amount owned: {self._amount}")
+        #print(f"new amount owned: {self._amount}")
         self._prices_calculated = False
     
     # Sečte Base, Profit a Price
@@ -163,12 +160,9 @@ class Position:
     
     # Měnový převod
     def _currency_exchange(self, currency):
-        
-        # Vytvoření tickeru pro Forex
-        ticker = self._currency + currency + "=X"
-        
+
         # Vytvoření Forexu
-        forex = Forex(ticker)
+        forex = forex_creator(from_currency=self._currency, to_currency=currency)
         forex_prices = forex.get_prices(self._first_date)
         
         # Přeindexování na potřebný rozsah a vytvoření masky
@@ -192,7 +186,9 @@ class Position:
         self._position_prices["Base"] = self._position_prices["Base"] * forex_prices["Close_base"]
         self._position_prices["Profit"] = self._position_prices["Profit"] * forex_prices["Close"]
         self._position_prices["Price"] = self._position_prices["Price"] * forex_prices["Close"]
-        
+
+        #print(self._asset.get_name())
+        #print(self._position_prices)
         # Logický součin masek existence záznamu
         self._position_prices["Mask"] = self._position_prices["Mask"].combine(
             forex_prices["Mask"],

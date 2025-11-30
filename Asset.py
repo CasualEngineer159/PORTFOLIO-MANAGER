@@ -114,3 +114,30 @@ class Forex(Asset):
         self._daily_history.sort_index()
         self._daily_history = fill_gaps(self._daily_history)
         return self._daily_history.loc[start_date:].copy()
+
+    def get_rate(self, date) -> float:
+        return get_closest_value(self._daily_history, date,"Close")
+
+def forex_creator(from_currency, to_currency) -> Forex:
+    forex_dict = {}
+    ticker = from_currency + to_currency + "=X"
+    print(ticker)
+    if ticker in forex_dict.keys():
+        return forex_dict[ticker]
+    forex = Forex(ticker)
+    return forex
+
+asset_dict = {}
+def asset_creator(ticker) -> Stock:
+    if ticker in asset_dict.keys():
+        return asset_dict[ticker]
+    stock = Stock(ticker)
+    asset_dict[ticker] = stock
+    return stock
+
+def get_closest_value(df, wanted_date, column):
+    df = df.sort_index()
+    idx = df.index.asof(wanted_date)
+    if pd.isna(idx):
+        idx = df.index[0]
+    return df[column].loc[idx]
