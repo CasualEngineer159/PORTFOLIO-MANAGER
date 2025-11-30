@@ -1,21 +1,11 @@
-import pprint
+from idlelib import history
 
-import pandas as pd
+from matplotlib import dates
 
 from Asset import *
 from rich import print
-
-def create_dataframe_from_date(date) -> pd.DataFrame:
-    dates = pd.date_range(start=date, end=get_last_business_day(), freq='D')
-    df = pd.DataFrame()
-    df = df.reindex(dates)
-    df.index.name = "Date"
-    df["Base"] = np.nan
-    df["Profit"] = np.nan
-    df["Price"] = np.nan
-    df["Growth"] = np.nan
-    df["Mask"] = True
-    return df
+from enum import IntEnum
+from Transaction import *
 
 class Portfolio:
 
@@ -30,7 +20,7 @@ class Portfolio:
         self._portfolio_prices = create_dataframe_from_date(self._first_date)
 
     # Vytvoření nové transakce - vytvření/přiřazení pozice
-    def new_transaction(self, amount: int, date: datetime, asset: Asset, price: float = None):
+    def new_long_transaction(self, date: datetime, asset: Asset, amount: int = None, price: float = None, fraction: bool = False):
 
         # Odstranění času z data
         date = date.date()
@@ -40,8 +30,11 @@ class Portfolio:
             self._position_dict[asset] = Position(asset)
 
         # Vytvoření transakce v dané pozici
-        self._position_dict[asset].new_transaction(amount, date, price)
-    
+        if not fraction:
+            self._position_dict[asset].new_transaction(amount, date, TransactionType.LONG, price)
+        else:
+            self._position_dict[asset].new_transaction(amount, date, TransactionType.FRACTION_LONG, price)
+
     # Zjistí datum první transakce
     def _create_first_date(self):
         asset, position = next(iter(self._position_dict.items()))
@@ -97,6 +90,9 @@ class Portfolio:
         plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf profitu {self._currency} {real}", "Profit")
         plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf báze {self._currency} {real}", "Base")
 
+long_transaction_factory = LongTransactionPrepper()
+long_fraction_transaction_factory = LongFractionTransactionPrepper()
+
 class Position:
     def __init__(self, asset: Asset):
         self._asset = asset
@@ -119,11 +115,26 @@ class Position:
         self._position_prices = create_dataframe_from_date(self._first_date)
 
     # Vytvoření nového objektu transakce a zařazení do listu transakcí
-    def new_transaction(self, amount: int, date: datetime, price: float = None):
-        if (self._amount + amount) < 0:
-            amount = -self._amount
-        self._transaction_list.append(Transaction(self._asset, date, amount, price))
-        self._amount = self._amount + amount
+    def new_transaction(self, amount: int, date: datetime,transaction_type: TransactionType, price: float = None):
+
+        transaction, amount_bought = None, None
+
+        if transaction_type == TransactionType.LONG:
+            transaction, amount_bought = long_transaction_factory.new_transaction(asset=self._asset,
+                                                                                  date=date,
+                                                                                  amount=amount,
+                                                                                  price=price,
+                                                                                  amount_owned=self._amount)
+
+        elif transaction_type == TransactionType.FRACTION_LONG:
+            transaction, amount_bought = long_fraction_transaction_factory.new_transaction(asset=self._asset,
+                                                                                  date=date,
+                                                                                  amount=amount,
+                                                                                  price=price,
+                                                                                  amount_owned=self._amount)
+        self._transaction_list.append(transaction)
+        self._amount = self._amount + amount_bought
+        print(f"new amount owned: {self._amount}")
         self._prices_calculated = False
     
     # Sečte Base, Profit a Price
@@ -207,94 +218,3 @@ class Position:
         self._calculate_growth()
         self._prices_calculated = True
         return self._position_prices
-
-class Transaction:
-
-    def __init__(self, asset: Asset, date: datetime, amount: int, price: float = None):
-        
-        self._asset = asset
-        self._date = date
-        self._price = price
-        self._amount = amount
-
-        self._dates = pd.date_range(start=self._date, end=get_last_business_day(), freq='D')
-
-        self._history = self._asset.get_prices(self._date)
-        self._first_record_date = self._asset.get_earliest_record_date()
-
-        self._record_to_date = self._get_record_to_date()
-        
-        # Kontrola správnosti transakce
-        self._check_transaction()
-
-        self._transaction_prices = create_dataframe_from_date(self._date)
-        
-        # Výpočet průběhu transakce
-        self._create_base()
-        self._create_change()
-        self._create_profit()
-        self._create_price()
-        self._create_mast()
-
-    def _get_record_to_date(self) -> pd.DataFrame:
-        nearest_row = self._history.index.asof(self._date)
-        if pd.isna(nearest_row):
-            self._history = self._history.reindex(self._dates)
-            self._history.index = self._history.index.date
-            return self._get_record_to_date()
-        return self._history.loc[nearest_row]
-
-    def _check_transaction(self):
-        
-        # Pokud byla transakce provedena dříve než existuje záznam, vyhodíme varování
-        if self._date < self._first_record_date:
-            print(f"[red]!!!Pozor, v datu {self._date} transakce {self._asset.get_name()} ještě není záznam cen!!![/red] první datum záznamu: {self._first_record_date}")
-            # Jestli nebyla zadána cena nákupu, určíme z nejbližší zavírací ceny
-            if self._price is None:
-                self._price = self._history.loc[self._first_record_date, "Close"]
-        else:
-            # Jestli nebyla zadána cena nákupu, určíme z nejbližší zavírací ceny
-            if self._price is None:
-                self._price = self._record_to_date["Close"]
-            
-            # Zkontrolujeme zda cena zapadá do denního rozmezí
-            low = self._record_to_date["Low"]
-            high = self._record_to_date["High"]
-            if not low <= self._price <= high:
-                print(f"[red]!!! Cena {self._asset.get_name()} mimo denní rozsah!!![/red] platný rozsah: low: {low}, price: {self._price}, high: {high}")
-
-    def _create_base(self):
-        self._transaction_prices["Base"] = self._amount * self._price
-
-    def _create_change(self):
-
-        # Vytvoření řady změny se začátkem v datu transakce
-        returns = self._history.loc[self._date:, "return"]
-        returns = returns.reindex(index=self._transaction_prices.index)
-        returns = returns.fillna(0) + 1
-
-        # Výpočet procentuálního rozdílu nákupní ceny od poslední obchodované toho dne
-        intraday_change = (self._history.iloc[0]["Close"] - self._price) / self._price + 1
-        if pd.isna(intraday_change):
-            intraday_change = (self._history.loc[self._first_record_date, "Close"] - self._price) / self._price + 1
-
-        # Nastavení intraday change na den nákupu
-        returns.iloc[0] = intraday_change
-
-        self._transaction_prices["Growth"] = returns.cumprod()
-
-    def _create_profit(self):
-        self._transaction_prices["Profit"] = self._transaction_prices["Base"] * (self._transaction_prices["Growth"] - 1)
-        
-    def _create_price(self):
-        self._transaction_prices["Price"] = self._transaction_prices["Base"].add(self._transaction_prices["Profit"])
-        
-    def _create_mast(self):
-        self._history = self._history.reindex(self._dates)
-        self._transaction_prices["Mask"] = self._history["Close"].notna()
-
-    def get_transaction(self):
-        return self._transaction_prices
-    
-    def get_date(self) -> datetime:
-        return self._date

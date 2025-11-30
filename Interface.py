@@ -5,10 +5,14 @@ snp = ETF("VUSA.AS")
 
 portfolio = Portfolio("test", "EUR")
 
-for i in range(0, 25):
+for i in range(13, 24):
     for j in range(1, 12):
-        portfolio.new_transaction(1, datetime(2000+i,j,1), snp)
-#portfolio.new_transaction(1, datetime(2020,11,15), snp)
+        print(datetime(2000 + i, j, 1))
+        portfolio.new_long_transaction(price=80,
+                                       date=datetime(2000+i,j,1),
+                                       asset = snp,
+                                       fraction = True)
+
 #portfolio.new_transaction(1, datetime(2020,11,20), snp)
 #portfolio.new_transaction(1, datetime(2020,11,25), snp)
 #print(portfolio._position_dict)

@@ -5,6 +5,17 @@ yfinance_m = YfinanceManager()
 aplha_vantage_m = AlphaVantage()
 twelve_data_m = TwelveData()
 
+def create_dataframe_from_date(date) -> pd.DataFrame:
+    _dates = pd.date_range(start=date, end=get_last_business_day(), freq='D')
+    df = pd.DataFrame()
+    df = df.reindex(_dates)
+    df.index.name = "Date"
+    df["Base"] = np.nan
+    df["Profit"] = np.nan
+    df["Price"] = np.nan
+    df["Growth"] = np.nan
+    df["Mask"] = True
+    return df
 
 def plot_price(history, date, plot_name, column):
     plt.figure(figsize=(10, 6))
