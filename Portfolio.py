@@ -14,7 +14,7 @@ class Portfolio:
         self._portfolio_prices = create_dataframe_from_date(self._first_date)
 
     # Vytvoření nové transakce - vytvření/přiřazení pozice
-    def new_transaction(self, transaction_type: TransactionType, date: datetime, asset: Asset,currency: str = None, amount: int = None, price: float = None):
+    def new_transaction(self, transaction_type: TransactionType, date: datetime, asset: Asset,currency: str = None, amount: int = None, price: float = None, venue: str = None):
 
         # Odstranění času z data
         date = date.date()
@@ -23,7 +23,7 @@ class Portfolio:
         if asset not in self._position_dict.keys():
             self._position_dict[asset] = Position(asset)
 
-        self._position_dict[asset].new_transaction(amount, date, transaction_type, currency, price)
+        self._position_dict[asset].new_transaction(amount, date, transaction_type, currency, venue, price)
 
     # Zjistí datum první transakce
     def _create_first_date(self):
@@ -72,6 +72,30 @@ class Portfolio:
             self._portfolio_prices = self._portfolio_prices[self._portfolio_prices["Mask"]]
         self.plot_price(real)
         print(self._portfolio_prices)
+
+    def print_portfolio_positions(self):
+
+        for asset, position in self._position_dict.items():
+            name, currency, price, growth, profit, invested = position.get_last_value()
+
+            if price < 1:
+                continue
+
+            print("=" * 120)  # Oddělovací čára
+            print(f"💰 SOUČASNÁ POZICE: {name} ({currency})")
+            print("-" * 120)
+
+            # 1. řádek: Základní informace
+            print(f"INFO:   Aktivum: {name} | Měna: {currency}")
+
+            # 2. řádek: Hodnoty s Mask=True (Real/Filtrované)
+            # Použijeme formátování pro ceny na 2 desetinná místa a pro růst jako procento
+            print(f"POZICE: Investováno: {invested:,.2f} Cena: {price:,.2f} {currency:<3} | Profit: {profit:,.2f} | Růst: {growth * 100 - 100:+.2f}%")
+
+            # 3. řádek: Hodnoty bez filtru (False/Poslední bez ohledu na Mask)
+            #print(f"FALSE:   Cena: {price_false:,.2f} {currency:<3} | Růst: {growth_false * 100:+.2f}%")
+
+            print("=" * 120)  # Oddělovací čára
     
     # Vytvoří graf png   
     def plot_price(self, real):
@@ -102,14 +126,35 @@ class Position:
         self._position_prices = create_dataframe_from_date(self._first_date)
 
     # Vytvoření nového objektu transakce a zařazení do listu transakcí
-    def new_transaction(self, amount: int, date: datetime,transaction_type: TransactionType, currency, price: float = None):
+    def new_transaction(self, amount: int, date: datetime,transaction_type: TransactionType, currency, venue, price: float = None):
+
+        print(f"""
+        ==================================================
+            ✨ Transakce {self._asset.get_name()} ✨
+        ==================================================
+
+        🚀 Typ transakce: {transaction_type}
+        📅 Datum transakce: {date}
+        ℹ️ Cena: {price}
+        ℹ️ Počet: {amount}
+        ℹ️ Měna: {currency}
+        
+        ℹ️ Měna vedené akcie: {self._currency}
+        
+        Zpracování transakce:
+        
+        
+        """)
 
         price = price
         if not (self._currency == currency) and price is not None and currency is not None:
             forex = forex_creator(from_currency=currency, to_currency=self._currency)
             rate = forex.get_rate(date)
-            #print(f"price: {price}, rate: {rate}")
-            #price = price * rate
+            print(f"""
+        Exchange rate z {currency} do {self._currency} dne {date} je {rate}.""")
+            price = price * rate
+            print(f"""
+        Po převodu je vychází nákup na {price} v {self._currency}.""")
 
         transaction = None
 
@@ -129,10 +174,18 @@ class Position:
 
         self._transaction_list.append(transaction)
         amount_bought = transaction.get_amount()
-        print(amount_bought)
         self._amount = self._amount + amount_bought
-        #print(f"new amount owned: {self._amount}")
+        print(f"""
+        Nový počet vlastněného aktiva: {self._amount}
+        """)
         self._prices_calculated = False
+        print("""  
+              
+        --------------------------------------------------
+          Tento blok slouží k rychlé orientaci v konzoli.
+        --------------------------------------------------
+
+        """)
     
     # Sečte Base, Profit a Price
     def _add_transactions(self):
@@ -157,6 +210,17 @@ class Position:
     # Výpočet výkonu pozice
     def _calculate_growth(self):
         self._position_prices["Growth"] = self._position_prices["Price"] / self._position_prices["Base"]
+
+    def get_last_value(self):
+        filtered_prices = self._position_prices[self._position_prices["Mask"]]
+        name = self._asset.get_name()
+        currency = self._currency
+        price = filtered_prices["Price"].iloc[-1]
+        growth = filtered_prices["Growth"].iloc[-1]
+        profit = filtered_prices["Profit"].iloc[-1]
+        invested = filtered_prices["Base"].iloc[-1]
+
+        return name, currency, price, growth, profit, invested
     
     # Měnový převod
     def _currency_exchange(self, currency):
@@ -195,6 +259,8 @@ class Position:
             func=lambda x, y: x & y,
             fill_value=True
         )
+
+        self._currency = currency
     
     # Vrátí datum první transakce
     def get_first_date(self) -> datetime:
@@ -208,7 +274,7 @@ class Position:
             self._create_first_date()
             self._create_position_prices()
             self._add_transactions()
-        print(f"Asset currency: {self._currency}, portfolio currency: {currency}")
+        #print(f"Asset currency: {self._currency}, portfolio currency: {currency}")
         if not (self._currency == currency):
             self._currency_exchange(currency)
         self._calculate_growth()

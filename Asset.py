@@ -72,6 +72,8 @@ class Asset:
             return self._daily_history.copy()
         return self._daily_history.loc[nearest_row:].copy()
 
+    def get_venue(self):
+        return self._stock_info.get("fullExchangeName", None)
 
 class Stock(Asset):
     def __init__(self, ticker):
@@ -118,13 +120,13 @@ class Forex(Asset):
     def get_rate(self, date) -> float:
         return get_closest_value(self._daily_history, date,"Close")
 
+forex_dict = {}
 def forex_creator(from_currency, to_currency) -> Forex:
-    forex_dict = {}
     ticker = from_currency + to_currency + "=X"
-    print(ticker)
     if ticker in forex_dict.keys():
         return forex_dict[ticker]
     forex = Forex(ticker)
+    forex_dict[ticker] = forex
     return forex
 
 asset_dict = {}

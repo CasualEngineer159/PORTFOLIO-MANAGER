@@ -41,8 +41,8 @@ class Transaction:
         self._create_price()
         self._create_mask()
 
-        print(self._asset.get_currency())
-        print(self._transaction_prices.head())
+        #print(f"Následuje výpis průběhu transakce:")
+        #print(self._transaction_prices)
 
     def _set_parameters(self):
         ...
@@ -52,9 +52,11 @@ class Transaction:
 
     def _check_amount(self, amount_owned):
         # Kontrola zda se nedostáváme s počtem do mínusu
-        print(f"amount owned: {amount_owned}, amount: {self._amount}")
         if amount_owned + self._amount < 0:
             self._amount = -amount_owned
+        print(f"""
+        Původní počet aktiva: {amount_owned}, nakoupeno: {self._amount}
+        """)
 
     def _get_history(self):
         self._dates = pd.date_range(start=self._date, end=get_last_business_day(), freq='D')
@@ -88,8 +90,19 @@ class Transaction:
             low = self._record_to_date["Low"]
             high = self._record_to_date["High"]
             if not low <= self._price <= high:
-                print(
-                    f"[red]!!! Cena {self._asset.get_name()} mimo denní rozsah!!![/red] platný rozsah: low: {low}, price: {self._price}, high: {high}")
+                print(f"""
+        [red]!!! Cena {self._asset.get_name()} mimo denní rozsah!!![/red]
+        Platný rozsah: low: {low}, price: {self._price}, high: {high}""")
+                price_temp = self._price * self._amount
+                if self._price > high:
+                    self._price = high
+                else:
+                    self._price = low
+                self._amount = price_temp / self._price
+                print(f"""
+        [orange]Transakce bude převedena na frakční:[/orange]
+        Nová nákupní cena: {self._price}
+""")
 
     def _create_base(self):
         self._transaction_prices["Base"] = self._amount * self._price
