@@ -53,22 +53,17 @@ for row in degiro_transactions.itertuples():
     amount = row.Počet
     total_price = price * amount
     currency = row.Měna
+    exchange = row.Reference
 
-    """degiro_portfolio.new_transaction(
-        transaction_type=TransactionType.FRACTION_LONG,
-        date=datum,
-        asset=asset_creator(ticker),
-        price=total_price,  # Zde použijeme vypočtenou hodnotu
-        currency=currency
-    )"""
 
     degiro_portfolio_2.new_transaction(
         transaction_type=TransactionType.LONG,
         date=datum,
-        asset=asset_creator(ticker),
+        ticker=ticker,
         amount=amount,
         price=price,
-        currency=currency
+        currency=currency,
+        venue=exchange
     )
 
 #degiro_portfolio.get_portfolio()
@@ -77,5 +72,4 @@ for row in degiro_transactions.itertuples():
 
 degiro_portfolio_2.get_portfolio()
 
-degiro_portfolio_2.print_portfolio_positions()
-
+degiro_portfolio_2.save_portfolio_to_file()

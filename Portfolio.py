@@ -1,5 +1,7 @@
 from rich import print
+
 from Transaction import *
+from figi_api import *
 
 class Portfolio:
 
@@ -14,7 +16,17 @@ class Portfolio:
         self._portfolio_prices = create_dataframe_from_date(self._first_date)
 
     # Vytvoření nové transakce - vytvření/přiřazení pozice
-    def new_transaction(self, transaction_type: TransactionType, date: datetime, asset: Asset,currency: str = None, amount: int = None, price: float = None, venue: str = None):
+    def new_transaction(self, transaction_type: TransactionType, date: datetime, ticker: str,currency: str = None, amount: int = None, price: float = None, venue: str = None):
+
+        asset = asset_creator(ticker)
+
+        if venue is not None and asset.get_venue() != venue:
+            figi_code, yahoo_suf = venue_interpreter(venue)
+            try:
+                ticker = ticker_from_isin(ticker, figi_code) + yahoo_suf
+            except: "Open figi nevyšlo."
+
+        asset = asset_creator(ticker)
 
         # Odstranění času z data
         date = date.date()
@@ -73,30 +85,104 @@ class Portfolio:
         self.plot_price(real)
         print(self._portfolio_prices)
 
-    def print_portfolio_positions(self):
+    def save_portfolio_to_file(self):
+        filename = f"Výpis portfolia {self._name}.txt"
 
-        for asset, position in self._position_dict.items():
-            name, currency, price, growth, profit, invested = position.get_last_value()
+        # --- DEFINICE ŠÍŘKY SLOUPCŮ ---
+        w_name = 30
+        w_qty = 8
+        w_price = 12
+        w_curr = 6
+        w_val = 12
+        w_bz = 12
+        w_pl = 12
+        w_chg = 10
 
-            if price < 1:
-                continue
+        # Formátovací řetězce (používají f-stringy pro vložení šířek)
+        header_fmt = f"| {{:<{w_name}}} | {{:>{w_qty}}} | {{:>{w_price}}} | {{:^{w_curr}}} | {{:>{w_val}}} | {{:>{w_bz}}} | {{:>{w_pl}}} | {{:>{w_chg}}} |"
+        row_fmt = f"| {{:<{w_name}}} | {{:>{w_qty}.2f}} | {{:>{w_price}.2f}} | {{:^{w_curr}}} | {{:>{w_val}.2f}} | {{:>{w_bz}.2f}} | {{:>{w_pl}.2f}} | {{:>{w_chg - 1}.2f}}% |"
 
-            print("=" * 120)  # Oddělovací čára
-            print(f"💰 SOUČASNÁ POZICE: {name} ({currency})")
-            print("-" * 120)
+        # Výpočet šířky pro součtový řádek (pro zarovnání pod P/L)
+        width_before_pl = w_name + w_qty + w_price + w_curr + w_val + w_bz + (5 * 3)
+        total_row_fmt = f"| {{:<{width_before_pl}}} | {{:>{w_pl}.2f}} | {{:<{w_chg}}} |"
 
-            # 1. řádek: Základní informace
-            print(f"INFO:   Aktivum: {name} | Měna: {currency}")
+        # Oddělovací čára
+        line_sep = "+" + "-" * (w_name + 2) + "+" + "-" * (w_qty + 2) + "+" + "-" * (w_price + 2) + "+" + "-" * (
+                    w_curr + 2) + "+" + "-" * (w_val + 2) + "+" + "-" * (w_bz + 2) + "+" + "-" * (
+                               w_pl + 2) + "+" + "-" * (w_chg + 2) + "+"
 
-            # 2. řádek: Hodnoty s Mask=True (Real/Filtrované)
-            # Použijeme formátování pro ceny na 2 desetinná místa a pro růst jako procento
-            print(f"POZICE: Investováno: {invested:,.2f} Cena: {price:,.2f} {currency:<3} | Profit: {profit:,.2f} | Růst: {growth * 100 - 100:+.2f}%")
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
 
-            # 3. řádek: Hodnoty bez filtru (False/Poslední bez ohledu na Mask)
-            #print(f"FALSE:   Cena: {price_false:,.2f} {currency:<3} | Růst: {growth_false * 100:+.2f}%")
+                print(f"PŘEHLED PORTFOLIA: {self._name} ({self._currency})", file=f)
+                print("\n", file=f)
 
-            print("=" * 120)  # Oddělovací čára
-    
+                # --- 1. OTEVŘENÉ POZICE ---
+                print("💰 OTEVŘENÉ POZICE", file=f)
+                print(line_sep, file=f)
+                print(header_fmt.format("PRODUKT", "POČET", "CENA/KS", "MĚNA", "HODNOTA", "BZ (AVG)", "P/L", "ZMĚNA"),
+                      file=f)
+                print(line_sep, file=f)
+
+                total_profit_open = 0
+
+                for asset, position in self._position_dict.items():
+                    name, currency, price, growth, profit, invested, amount, last_price = position.get_last_value()
+
+                    if price < 1: continue  # Filtr pro otevřené
+
+                    total_profit_open += profit
+
+                    # Výpočty
+                    avg_cost = invested / amount if amount != 0 else 0
+                    growth_percent = (growth * 100) - 100
+                    display_name = (name[:w_name - 2] + '..') if len(name) > w_name else name
+
+                    print(row_fmt.format(display_name, amount, last_price, currency, price, avg_cost, profit,
+                                         growth_percent), file=f)
+
+                # Součet otevřených
+                print(line_sep, file=f)
+                print(total_row_fmt.format("CELKOVÝ P/L OTEVŘENÝCH POZIC:", total_profit_open, ""), file=f)
+                print(line_sep, file=f)
+                print("\n\n", file=f)
+
+                # --- 2. UZAVŘENÉ POZICE ---
+                print("🔒 UZAVŘENÉ POZICE", file=f)
+                print(line_sep, file=f)
+                print(header_fmt.format("PRODUKT", "POČET", "CENA/KS", "MĚNA", "HODNOTA", "BZ (AVG)", "P/L", "ZMĚNA"),
+                      file=f)
+                print(line_sep, file=f)
+
+                total_profit_closed = 0
+
+                for asset, position in self._position_dict.items():
+                    name, currency, price, growth, profit, invested, amount, last_price = position.get_last_value()
+
+                    if price >= 1: continue  # Filtr pro uzavřené
+
+                    total_profit_closed += profit
+
+                    # --- ZMĚNA: Použijeme stejné výpočty jako nahoře ---
+                    # Ošetření dělení nulou je zde důležité, pokud je u uzavřené pozice amount=0
+                    avg_cost = invested / amount if amount != 0 else 0
+                    growth_percent = (growth * 100) - 100
+                    display_name = (name[:w_name - 2] + '..') if len(name) > w_name else name
+
+                    # --- ZMĚNA: Použijeme stejný row_fmt namísto ručních pomlček ---
+                    print(row_fmt.format(display_name, amount, last_price, currency, price, avg_cost, profit,
+                                         growth_percent), file=f)
+
+                # Součet uzavřených (volitelné, pokud ho tam chcete také)
+                print(line_sep, file=f)
+                print(total_row_fmt.format("CELKOVÝ REALIZOVANÝ ZISK:", total_profit_closed, ""), file=f)
+                print(line_sep, file=f)
+
+            print(f"✅ Úspěšně uloženo do souboru: {filename}")
+
+        except Exception as e:
+            print(f"❌ Chyba při ukládání souboru: {e}")
+
     # Vytvoří graf png   
     def plot_price(self, real):
         plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf růstu {self._currency} {real}", "Growth")
@@ -111,6 +197,7 @@ class Position:
         self._currency = self._asset.get_currency()
         self._prices_calculated = False
         self._amount = 0
+        self._venue = self._asset.get_venue()
     
     # Najde datum první transakce
     def _create_first_date(self):
@@ -138,6 +225,7 @@ class Position:
         ℹ️ Cena: {price}
         ℹ️ Počet: {amount}
         ℹ️ Měna: {currency}
+        ℹ️ Burza: {venue}
         
         ℹ️ Měna vedené akcie: {self._currency}
         
@@ -219,8 +307,10 @@ class Position:
         growth = filtered_prices["Growth"].iloc[-1]
         profit = filtered_prices["Profit"].iloc[-1]
         invested = filtered_prices["Base"].iloc[-1]
+        amount = self._amount
+        current_price = self._asset.get_prices(get_last_business_day())["Close"].iloc[-1]
 
-        return name, currency, price, growth, profit, invested
+        return name, currency, price, growth, profit, invested, amount, current_price
     
     # Měnový převod
     def _currency_exchange(self, currency):
@@ -266,6 +356,35 @@ class Position:
     def get_first_date(self) -> datetime:
         self._create_first_date()
         return self._first_date
+
+    # Pokud byla pozice prodána, upravíme data od toho momentu
+    def _clean_position_data(self):
+
+        # 1. Vytvoření masky pro "nulové" řádky (kde je cena prakticky nula)
+        # True = řádek, který chceme upravit (nulovat nebo fillovat)
+        invalid_mask = self._position_prices['Price'].abs() < 0.0001
+
+        # 2. Nastavení 'Base' a 'Price' na 0 tam, kde platí maska (neplatné řádky)
+        # Používáme .loc pro bezpečný zápis do dataframe
+        cols_to_zero = ['Base', 'Price']
+        # Pro jistotu ověříme, zda sloupce existují, aby kód nepadal
+        existing_cols_zero = [c for c in cols_to_zero if c in self._position_prices.columns]
+
+        if existing_cols_zero:
+            self._position_prices.loc[invalid_mask, existing_cols_zero] = 0
+
+        # 3. Forward fill (doplnění) pro 'Profit' a 'Growth'
+        # .where(~invalid_mask) -> Ponechá hodnoty tam, kde je řádek PLATNÝ (negace masky).
+        # Ostatní (kde je invalid_mask True) nahradí NaN, které následně .ffill() vyplní.
+        cols_to_fill = ['Growth']
+        existing_cols_fill = [c for c in cols_to_fill if c in self._position_prices.columns]
+
+        if existing_cols_fill:
+            self._position_prices[existing_cols_fill] = (
+                self._position_prices[existing_cols_fill]
+                .where(~invalid_mask)  # Ponechat platné, zbytek NaN
+                .ffill()  # NaN doplnit předchozí hodnotou
+            )
         
     # Vrátí historii pozice
     def get_position(self, currency:str) -> pd.DataFrame:
@@ -279,4 +398,10 @@ class Position:
             self._currency_exchange(currency)
         self._calculate_growth()
         self._prices_calculated = True
+
+        self._clean_position_data()
+
+        # Zápis do souboru
+        self._position_prices.to_csv(f'DATA/POSITION_PRICES/{self._asset.get_name()}.history.csv')
+
         return self._position_prices

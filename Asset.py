@@ -48,7 +48,10 @@ class Asset:
         self._stock_info = self.manager.get_info(ticker)
         self._daily_history = self.manager.get_history(ticker)
         self._name = self._stock_info.get("longName", self._ticker)
-        
+
+    def get_venue(self) -> str:
+        return self._stock_info.get("exchange", None)
+
     def get_ticker(self) -> str:
         return self.manager.get_ticker(self._ticker)
 
@@ -56,7 +59,7 @@ class Asset:
         return self._name
 
     def get_currency(self) -> str:
-        return self._stock_info.get("currency", "USD")
+        return self._stock_info.get("currency", None)
 
     def get_earliest_record_date(self) -> datetime:
         self._daily_history.sort_index()
@@ -71,9 +74,6 @@ class Asset:
         if pd.isna(nearest_row):
             return self._daily_history.copy()
         return self._daily_history.loc[nearest_row:].copy()
-
-    def get_venue(self):
-        return self._stock_info.get("fullExchangeName", None)
 
 class Stock(Asset):
     def __init__(self, ticker):

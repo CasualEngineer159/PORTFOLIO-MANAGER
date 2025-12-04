@@ -24,6 +24,7 @@ class Transaction:
         self._amount = amount
         self._price = price
         self._transaction_prices = create_dataframe_from_date(self._date)
+        self._terminate_position = False
 
         # Nastavení parametrů -> různé dle typu transakce
         self._set_parameters()
@@ -52,8 +53,9 @@ class Transaction:
 
     def _check_amount(self, amount_owned):
         # Kontrola zda se nedostáváme s počtem do mínusu
-        if amount_owned + self._amount < 0:
+        if amount_owned + self._amount <= 0:
             self._amount = -amount_owned
+            self._terminate_position = True
         print(f"""
         Původní počet aktiva: {amount_owned}, nakoupeno: {self._amount}
         """)
@@ -93,16 +95,17 @@ class Transaction:
                 print(f"""
         [red]!!! Cena {self._asset.get_name()} mimo denní rozsah!!![/red]
         Platný rozsah: low: {low}, price: {self._price}, high: {high}""")
-                price_temp = self._price * self._amount
-                if self._price > high:
-                    self._price = high
-                else:
-                    self._price = low
-                self._amount = price_temp / self._price
-                print(f"""
-        [orange]Transakce bude převedena na frakční:[/orange]
-        Nová nákupní cena: {self._price}
-""")
+
+#                price_temp = self._price * self._amount
+#                if self._price > high:
+#                    self._price = high
+#                else:
+#                    self._price = low
+#                self._amount = price_temp / self._price
+#                print(f"""
+#        [orange]Transakce bude převedena na frakční:[/orange]
+#        Nová nákupní cena: {self._price}
+#""")
 
     def _create_base(self):
         self._transaction_prices["Base"] = self._amount * self._price
@@ -120,7 +123,14 @@ class Transaction:
             intraday_change = (self._history.loc[self._first_record_date, "Close"] - self._price) / self._price + 1
 
         # Nastavení intraday change na den nákupu
+        #if not self._terminate_position:
         returns.iloc[0] = intraday_change
+        #else:
+        #    returns.iloc[0] = 1
+
+        print("returns první den:")
+        print(self._terminate_position)
+        print(returns.head(5))
 
         self._transaction_prices["Growth"] = returns.cumprod()
 
