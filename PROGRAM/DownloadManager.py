@@ -165,7 +165,7 @@ class DownloadManager:
     def _load_daily_history(self) -> pd.DataFrame:
         # Načte historická data z CSV souboru zpět do pandas.DataFrame.
         try:
-            file_path = f'DATA/{self._ticker}.history.csv'
+            file_path = f'../DATA/ASSET_HISTORY/{self._ticker}.history.csv'
 
             # Načtení CSV:
             # 1. index_col='Date': Nastaví sloupec 'Date' jako index.
@@ -187,7 +187,7 @@ class DownloadManager:
     def _load_stock_info(self) -> dict:
         # Načte informace o akcii z JSON souboru zpět do slovníku.
         try:
-            file_path = f"DATA/{self._ticker}.info.json"
+            file_path = f"../DATA/ASSET_INFO/{self._ticker}.info.json"
             with open(file_path, 'r', encoding='utf-8') as f:
                 stock_info = json.load(f)
             #print(f"✅ Informace pro {self._ticker načteny z JSON.")
@@ -248,7 +248,7 @@ class YfinanceManager(DownloadManager):
         stock_history = _normalize_history(stock_history)
 
         # Zápis do souboru
-        stock_history.to_csv(f'DATA/{self.get_ticker(self._ticker)}.history.csv')
+        stock_history.to_csv(f'../DATA/ASSET_HISTORY/{self.get_ticker(self._ticker)}.history.csv')
         return stock_history
 
     def _download_stock_info(self) -> dict:
@@ -258,7 +258,7 @@ class YfinanceManager(DownloadManager):
         stock_info = self._yahoo_ticker.get_info()
 
         # Zápis do souboru
-        file_path = f"DATA/{self._ticker}.info.json"
+        file_path = f"../DATA/ASSET_INFO/{self._ticker}.info.json"
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(stock_info, f, indent=4)
         return stock_info
@@ -272,7 +272,7 @@ class AlphaVantage(DownloadManager):
         super().__init__()
 
         # Načtení API klíče z tajného json souboru
-        with open("API.json", 'r', encoding='utf-8') as f:
+        with open("../DATA/PERSONAL/API.json", 'r', encoding='utf-8') as f:
             self.API = json.load(f)
 
     def _download_daily_history(self) -> pd.DataFrame:
@@ -338,7 +338,7 @@ class TwelveData(DownloadManager):
         super().__init__()
 
         # Načtení API klíče z tajného json souboru
-        with open("API.json", 'r', encoding='utf-8') as f:
+        with open("../DATA/PERSONAL/API.json", 'r', encoding='utf-8') as f:
             self.API = json.load(f)
 
     def _download_daily_history(self) -> pd.DataFrame:

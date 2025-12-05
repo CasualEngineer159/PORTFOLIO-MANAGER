@@ -1,8 +1,4 @@
-import pandas as pd
-
 from Portfolio import *
-
-#omx = asset_creator("IE00BD3RYZ16.AS")
 
 portfolio = Portfolio("LongFraction", "EUR")
 portfolio2 = Portfolio("Long", "EUR")
@@ -20,7 +16,7 @@ degiro_portfolio_2 = Portfolio("Degiro LONG WHOLE", "EUR")
 #            #currency="CZK"
 #        )
 
-file_path = f'DATA/Transactions.csv'
+file_path = f'../DATA/PERSONAL/Transactions.csv'
 
 degiro_transactions = pd.read_csv(
     file_path,
@@ -72,4 +68,4 @@ for row in degiro_transactions.itertuples():
 
 degiro_portfolio_2.get_portfolio()
 
-degiro_portfolio_2.save_portfolio_to_file()
+degiro_portfolio_2.export_portfolio_to_pdf()

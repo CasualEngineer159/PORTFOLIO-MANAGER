@@ -1,7 +1,8 @@
-from rich import print
+import os
 
 from Transaction import *
 from figi_api import *
+from fpdf import FPDF
 
 class Portfolio:
 
@@ -22,9 +23,11 @@ class Portfolio:
 
         if venue is not None and asset.get_venue() != venue:
             figi_code, yahoo_suf = venue_interpreter(venue)
-            try:
-                ticker = ticker_from_isin(ticker, figi_code) + yahoo_suf
-            except: "Open figi nevyšlo."
+            if figi_code is not None:
+                try:
+                    ticker = ticker_from_isin(ticker, figi_code) + yahoo_suf
+                except Exception as e:
+                    print(f"Figi blbne chyba: {e}")
 
         asset = asset_creator(ticker)
 
@@ -85,103 +88,183 @@ class Portfolio:
         self.plot_price(real)
         print(self._portfolio_prices)
 
-    def save_portfolio_to_file(self):
-        filename = f"Výpis portfolia {self._name}.txt"
+    def export_portfolio_to_pdf(self):
+        filename = f"../DATA/PERSONAL/Portfolio_Report_{self._name}.pdf"
 
-        # --- DEFINICE ŠÍŘKY SLOUPCŮ ---
-        w_name = 30
-        w_qty = 8
-        w_price = 12
-        w_curr = 6
-        w_val = 12
-        w_bz = 12
-        w_pl = 12
-        w_chg = 10
+        # ... inicializace pdf ...
+        pdf = FPDF(orientation='L', unit='mm', format='A4')
+        pdf.add_page()
 
-        # Formátovací řetězce (používají f-stringy pro vložení šířek)
-        header_fmt = f"| {{:<{w_name}}} | {{:>{w_qty}}} | {{:>{w_price}}} | {{:^{w_curr}}} | {{:>{w_val}}} | {{:>{w_bz}}} | {{:>{w_pl}}} | {{:>{w_chg}}} |"
-        row_fmt = f"| {{:<{w_name}}} | {{:>{w_qty}.2f}} | {{:>{w_price}.2f}} | {{:^{w_curr}}} | {{:>{w_val}.2f}} | {{:>{w_bz}.2f}} | {{:>{w_pl}.2f}} | {{:>{w_chg - 1}.2f}}% |"
-
-        # Výpočet šířky pro součtový řádek (pro zarovnání pod P/L)
-        width_before_pl = w_name + w_qty + w_price + w_curr + w_val + w_bz + (5 * 3)
-        total_row_fmt = f"| {{:<{width_before_pl}}} | {{:>{w_pl}.2f}} | {{:<{w_chg}}} |"
-
-        # Oddělovací čára
-        line_sep = "+" + "-" * (w_name + 2) + "+" + "-" * (w_qty + 2) + "+" + "-" * (w_price + 2) + "+" + "-" * (
-                    w_curr + 2) + "+" + "-" * (w_val + 2) + "+" + "-" * (w_bz + 2) + "+" + "-" * (
-                               w_pl + 2) + "+" + "-" * (w_chg + 2) + "+"
+        # --- OPRAVA FONTŮ (Načtení Normální i Tučné verze) ---
+        font_path_regular = 'C:/Windows/Fonts/arial.ttf'
+        font_path_bold = 'C:/Windows/Fonts/arialbd.ttf'  # Cesta k tučnému fontu
 
         try:
-            with open(filename, "w", encoding="utf-8") as f:
+            if os.path.exists(font_path_regular) and os.path.exists(font_path_bold):
+                # 1. Načteme normální Arial
+                pdf.add_font('Arial', '', font_path_regular)
 
-                print(f"PŘEHLED PORTFOLIA: {self._name} ({self._currency})", file=f)
-                print("\n", file=f)
+                # 2. Načteme tučný Arial (style='B')
+                pdf.add_font('Arial', 'B', font_path_bold)
 
-                # --- 1. OTEVŘENÉ POZICE ---
-                print("💰 OTEVŘENÉ POZICE", file=f)
-                print(line_sep, file=f)
-                print(header_fmt.format("PRODUKT", "POČET", "CENA/KS", "MĚNA", "HODNOTA", "BZ (AVG)", "P/L", "ZMĚNA"),
-                      file=f)
-                print(line_sep, file=f)
-
-                total_profit_open = 0
-
-                for asset, position in self._position_dict.items():
-                    name, currency, price, growth, profit, invested, amount, last_price = position.get_last_value()
-
-                    if price < 1: continue  # Filtr pro otevřené
-
-                    total_profit_open += profit
-
-                    # Výpočty
-                    avg_cost = invested / amount if amount != 0 else 0
-                    growth_percent = (growth * 100) - 100
-                    display_name = (name[:w_name - 2] + '..') if len(name) > w_name else name
-
-                    print(row_fmt.format(display_name, amount, last_price, currency, price, avg_cost, profit,
-                                         growth_percent), file=f)
-
-                # Součet otevřených
-                print(line_sep, file=f)
-                print(total_row_fmt.format("CELKOVÝ P/L OTEVŘENÝCH POZIC:", total_profit_open, ""), file=f)
-                print(line_sep, file=f)
-                print("\n\n", file=f)
-
-                # --- 2. UZAVŘENÉ POZICE ---
-                print("🔒 UZAVŘENÉ POZICE", file=f)
-                print(line_sep, file=f)
-                print(header_fmt.format("PRODUKT", "POČET", "CENA/KS", "MĚNA", "HODNOTA", "BZ (AVG)", "P/L", "ZMĚNA"),
-                      file=f)
-                print(line_sep, file=f)
-
-                total_profit_closed = 0
-
-                for asset, position in self._position_dict.items():
-                    name, currency, price, growth, profit, invested, amount, last_price = position.get_last_value()
-
-                    if price >= 1: continue  # Filtr pro uzavřené
-
-                    total_profit_closed += profit
-
-                    # --- ZMĚNA: Použijeme stejné výpočty jako nahoře ---
-                    # Ošetření dělení nulou je zde důležité, pokud je u uzavřené pozice amount=0
-                    avg_cost = invested / amount if amount != 0 else 0
-                    growth_percent = (growth * 100) - 100
-                    display_name = (name[:w_name - 2] + '..') if len(name) > w_name else name
-
-                    # --- ZMĚNA: Použijeme stejný row_fmt namísto ručních pomlček ---
-                    print(row_fmt.format(display_name, amount, last_price, currency, price, avg_cost, profit,
-                                         growth_percent), file=f)
-
-                # Součet uzavřených (volitelné, pokud ho tam chcete také)
-                print(line_sep, file=f)
-                print(total_row_fmt.format("CELKOVÝ REALIZOVANÝ ZISK:", total_profit_closed, ""), file=f)
-                print(line_sep, file=f)
-
-            print(f"✅ Úspěšně uloženo do souboru: {filename}")
+                # Nastavíme výchozí
+                pdf.set_font("Arial", size=10)
+                print("✅ Fonty Arial (Regular i Bold) úspěšně načteny.")
+            else:
+                print("⚠️ Pozor: Soubory fontu Arial nebyly nalezeny v C:/Windows/Fonts/")
+                # Fallback (čeština nepůjde)
+                pdf.set_font("Helvetica", size=10)
 
         except Exception as e:
-            print(f"❌ Chyba při ukládání souboru: {e}")
+            print(f"⚠️ Chyba při načítání fontů: {e}")
+            pdf.set_font("Helvetica", size=10)
+
+        # --- HLAVIČKA DOKUMENTU ---
+        # Nyní už můžeme bezpečně použít style='B', protože jsme ho nahoře definovali
+        pdf.set_font("Arial", size=16, style='B')
+        pdf.cell(0, 10, txt=f"PŘEHLED PORTFOLIA: {self._name}", ln=True, align='C')
+        pdf.set_font(size=10)
+        pdf.ln(5)  # Odřádkování
+
+        # Definice šířky sloupců (celkem cca 275 mm pro A4 landscape)
+        # Pořadí: Produkt, Počet, Cena, Měna, Hodnota, BZ, P/L, Změna
+        col_widths = [80, 20, 20, 30, 30, 30, 30, 30]
+        headers = ["PRODUKT","TICKER","KS","CENA","BZ", "HODNOTA","P/L","ZMĚNA"]
+
+        # Funkce pro vykreslení hlavičky tabulky
+        def print_table_header():
+            pdf.set_font(style='B')
+            pdf.set_fill_color(200, 220, 255)  # Světle modrá
+            for i, h in enumerate(headers):
+                pdf.cell(col_widths[i], 8, h, border=1, align='C', fill=True)
+            pdf.ln()
+            pdf.set_font(style='')  # Zrušit tučné
+
+        # --- 1. OTEVŘENÉ POZICE ---
+        pdf.set_font(size=12, style='B')
+        pdf.cell(0, 10, "OTEVŘENÉ POZICE", ln=True)
+        pdf.set_font(size=10)
+
+        print_table_header()
+
+        total_profit_open = 0
+
+        # Iterace daty
+        for asset, position in self._position_dict.items():
+            name, currency, price, growth, profit, brake_even, amount, last_price, ticker = position.get_last_value()
+
+            if price < 1: continue  # Filtr pro otevřené
+
+            total_profit_open += profit
+
+            # Výpočty
+            growth_pct = (growth * 100) - 100
+
+            # Zjistíme aktuální šířku názvu
+            current_width = pdf.get_string_width(name)
+
+            display_name = name
+
+            # NOVÁ LOGIKA ZALOŽENÁ NA ŠÍŘCE
+            if current_width > 80:
+                # Zde už nemůžeme použít jednoduché zkrácení pomocí indexu [:-3],
+                # musíme iterovat a zkracovat, dokud se šířka nevejde
+
+                while pdf.get_string_width(display_name + '...') > 79 and len(display_name) > 3:
+                    display_name = display_name[:-1]  # Odstraňujeme poslední znak
+
+                display_name += '...'
+
+            # Data řádku
+            row_data = [
+                display_name,
+                ticker,
+                f"{amount}",
+                f"{last_price:.2f} " + currency,
+                f"{brake_even:.2f} " + currency,
+                f"{price:.2f} " + self._currency,
+                f"{profit:.2f} " + self._currency,
+                f"{growth_pct:.2f}% "
+            ]
+
+            # Vykreslení buněk
+            for i, data in enumerate(row_data):
+                # Zarovnání: První sloupec (název) vlevo, zbytek vpravo
+                align = 'L' if i == 0 else 'R'
+                pdf.cell(col_widths[i], 7, str(data), border=1, align=align)
+            pdf.ln()
+
+        # Součet otevřených
+        pdf.set_font(style='B')
+        pdf.cell(sum(col_widths[:-2]), 8, "CELKEM OTEVŘENÉ POZICE:", border=1, align='L')
+        pdf.cell(col_widths[-2], 8, f"{total_profit_open:.2f}", border=1, align='R')
+        pdf.cell(col_widths[-1], 8, "", border=1)  # Prázdná buňka na konci
+        pdf.ln(15)  # Větší mezera mezi sekcemi
+
+        # --- 2. UZAVŘENÉ POZICE ---
+        pdf.set_font(size=12, style='B')
+        pdf.cell(0, 10, "UZAVŘENÉ POZICE", ln=True)
+        pdf.set_font(size=10)
+
+        print_table_header()
+
+        total_profit_closed = 0
+
+        for asset, position in self._position_dict.items():
+            name, currency, price, growth, profit, brake_even, amount, last_price, ticker = position.get_last_value()
+
+            if price >= 1: continue  # Filtr pro uzavřené
+
+            total_profit_closed += profit
+
+            growth_pct = (growth * 100) - 100
+
+            # Zjistíme aktuální šířku názvu
+            current_width = pdf.get_string_width(name)
+
+            display_name = name
+
+            # NOVÁ LOGIKA ZALOŽENÁ NA ŠÍŘCE
+            if current_width > 80:
+                # Zde už nemůžeme použít jednoduché zkrácení pomocí indexu [:-3],
+                # musíme iterovat a zkracovat, dokud se šířka nevejde
+
+                while pdf.get_string_width(display_name + '...') > 79 and len(display_name) > 3:
+                    display_name = display_name[:-1]  # Odstraňujeme poslední znak
+
+                display_name += '...'
+
+            # Data řádku
+            row_data = [
+                display_name,
+                ticker,
+                f"{amount}",
+                f"{last_price:.2f} " + currency,
+                f"{brake_even:.2f} " + currency,
+                f"{price:.2f} " + self._currency,
+                f"{profit:.2f} " + self._currency,
+                f"{growth_pct:.2f}% "
+            ]
+
+            for i, data in enumerate(row_data):
+                align = 'L' if i == 0 else 'R'
+                pdf.cell(col_widths[i], 7, str(data), border=1, align=align)
+            pdf.ln()
+
+        # Součet uzavřených
+        pdf.set_font(style='B')
+        pdf.cell(sum(col_widths[:-2]), 8, "CELKEM REALIZOVANÝ ZISK:", border=1, align='L')
+        pdf.cell(col_widths[-2], 8, f"{total_profit_closed:.2f}", border=1, align='R')
+        pdf.cell(col_widths[-1], 8, "", border=1)
+
+        # --- ULOŽENÍ ---
+        try:
+            pdf.output(filename)
+            abs_path = os.path.abspath(filename)
+            print(f"✅ PDF úspěšně vytvořeno: {abs_path}")
+            os.startfile(abs_path)
+        except Exception as e:
+            print(f"❌ Chyba při ukládání PDF (máš ho otevřené?): {e}")
 
     # Vytvoří graf png   
     def plot_price(self, real):
@@ -198,6 +281,7 @@ class Position:
         self._prices_calculated = False
         self._amount = 0
         self._venue = self._asset.get_venue()
+        self._break_even_point = None
     
     # Najde datum první transakce
     def _create_first_date(self):
@@ -206,7 +290,7 @@ class Position:
             if transaction.get_date() < date:
                 date = transaction.get_date()
         self._first_date = date
-        self._dates = pd.date_range(start=self._first_date, end=get_last_business_day(), freq='D')
+        self._dates = pd.date_range(start=self._first_date, end=datetime.now().date(), freq='D')
     
     # Vytvoří dataframe pro následné ukládání hodnot
     def _create_position_prices(self):
@@ -285,7 +369,7 @@ class Position:
             
             # Sečtení sloupců Base, Profit a Price
             self._position_prices["Base"] = self._position_prices["Base"].add(transaction_prices["Base"], fill_value=0)
-            self._position_prices["Profit"] = self._position_prices["Profit"].add(transaction_prices["Profit"], fill_value=0)
+            #self._position_prices["Profit"] = self._position_prices["Profit"].add(transaction_prices["Profit"], fill_value=0)
             self._position_prices["Price"] = self._position_prices["Price"].add(transaction_prices["Price"], fill_value=0)
             
             # Logický součin masek existence záznamu
@@ -294,6 +378,7 @@ class Position:
                 func=lambda x, y: x & y,
                 fill_value=True
             )
+        self._position_prices["Profit"] = self._position_prices["Price"] - self._position_prices["Base"]
     
     # Výpočet výkonu pozice
     def _calculate_growth(self):
@@ -302,15 +387,16 @@ class Position:
     def get_last_value(self):
         filtered_prices = self._position_prices[self._position_prices["Mask"]]
         name = self._asset.get_name()
-        currency = self._currency
+        currency = self._asset.get_currency()
         price = filtered_prices["Price"].iloc[-1]
         growth = filtered_prices["Growth"].iloc[-1]
         profit = filtered_prices["Profit"].iloc[-1]
-        invested = filtered_prices["Base"].iloc[-1]
+        brake_point = self._break_even_point
         amount = self._amount
         current_price = self._asset.get_prices(get_last_business_day())["Close"].iloc[-1]
+        ticker = self._asset.get_ticker()
 
-        return name, currency, price, growth, profit, invested, amount, current_price
+        return name, currency, price, growth, profit, brake_point, amount, current_price, ticker
     
     # Měnový převod
     def _currency_exchange(self, currency):
@@ -394,14 +480,23 @@ class Position:
             self._create_position_prices()
             self._add_transactions()
         #print(f"Asset currency: {self._currency}, portfolio currency: {currency}")
-        if not (self._currency == currency):
-            self._currency_exchange(currency)
-        self._calculate_growth()
-        self._prices_calculated = True
 
         self._clean_position_data()
 
+        if not self._amount == 0:
+            self._break_even_point = self._position_prices["Base"].iloc[-1] / self._amount
+        else:
+            self._break_even_point = 0
+
+        if not (self._currency == currency):
+            self._currency_exchange(currency)
+        pp.pprint(self._position_prices)
+        self._calculate_growth()
+        self._prices_calculated = True
+
+        pp.pprint(self._position_prices)
+
         # Zápis do souboru
-        self._position_prices.to_csv(f'DATA/POSITION_PRICES/{self._asset.get_name()}.history.csv')
+        self._position_prices.to_csv(f'../DATA/POSITION_PRICES/{self._asset.get_name()}.history.csv')
 
         return self._position_prices

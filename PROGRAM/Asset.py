@@ -6,7 +6,7 @@ aplha_vantage_m = AlphaVantage()
 twelve_data_m = TwelveData()
 
 def create_dataframe_from_date(date) -> pd.DataFrame:
-    _dates = pd.date_range(start=date, end=get_last_business_day(), freq='D')
+    _dates = pd.date_range(start=date, end=datetime.now().date(), freq='D')
     df = pd.DataFrame()
     df = df.reindex(_dates)
     df.index.name = "Date"
@@ -34,7 +34,7 @@ def plot_price(history, date, plot_name, column):
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.tight_layout()
 
-    filename = f"GRAPHS/{plot_name}.png"
+    filename = f"../GRAPHS/{plot_name}.png"
     plt.savefig(filename)
 
     # Zavřeme figure z paměti, aby se nezobrazila
@@ -48,6 +48,9 @@ class Asset:
         self._stock_info = self.manager.get_info(ticker)
         self._daily_history = self.manager.get_history(ticker)
         self._name = self._stock_info.get("longName", self._ticker)
+
+    def get_short_name(self):
+        return self._stock_info.get("shortName", self._ticker)
 
     def get_venue(self) -> str:
         return self._stock_info.get("exchange", None)

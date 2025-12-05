@@ -42,6 +42,8 @@ class Transaction:
         self._create_price()
         self._create_mask()
 
+        pp.pprint(self._transaction_prices)
+
         #print(f"Následuje výpis průběhu transakce:")
         #print(self._transaction_prices)
 
@@ -61,7 +63,7 @@ class Transaction:
         """)
 
     def _get_history(self):
-        self._dates = pd.date_range(start=self._date, end=get_last_business_day(), freq='D')
+        self._dates = pd.date_range(start=self._date, end=datetime.now().date(), freq='D')
         self._history = self._asset.get_prices(self._date)
         self._first_record_date = self._asset.get_earliest_record_date()
         self._record_to_date = self._get_record_to_date()
@@ -128,9 +130,9 @@ class Transaction:
         #else:
         #    returns.iloc[0] = 1
 
-        print("returns první den:")
-        print(self._terminate_position)
-        print(returns.head(5))
+        #print("returns první den:")
+        #print(self._terminate_position)
+        #print(returns.head(5))
 
         self._transaction_prices["Growth"] = returns.cumprod()
 
@@ -141,7 +143,7 @@ class Transaction:
         self._transaction_prices["Price"] = self._transaction_prices["Base"].add(self._transaction_prices["Profit"])
 
     def _create_mask(self):
-        _dates = pd.date_range(start=self._date, end=get_last_business_day(), freq='D')
+        _dates = pd.date_range(start=self._date, end=datetime.now().date(), freq='D')
         self._history = self._history.reindex(_dates)
         self._transaction_prices["Mask"] = self._history["Close"].notna()
 

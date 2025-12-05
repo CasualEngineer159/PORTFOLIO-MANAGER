@@ -74,7 +74,7 @@ def api_call(
 def venue_interpreter(venue):
 
     exchange_codes = pd.read_csv(
-        f'DATA/EXCHANGE_CODES.csv',
+        f'../DATA/IMPORTANT/EXCHANGE_CODES.csv',
         delimiter=";",
         keep_default_na=False,
     )
@@ -101,7 +101,7 @@ def save_figi_response(response, isin):
 def load_figi_response(isin) -> dict:
     # Načte informace z JSON souboru do slovníku.
     try:
-        file_path = f"DATA/figi.response.{isin}.json"
+        file_path = f"../DATA/FIGI_DATA/figi.response.{isin}.json"
         with open(file_path, 'r', encoding='utf-8') as f:
             stock_info = json.load(f)
         return stock_info
