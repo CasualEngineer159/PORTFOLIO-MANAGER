@@ -32,16 +32,17 @@ Adresářová struktura
 
 ### Popis klíčových souborů v /PROGRAM
 
-| Soubor | Popis |
-| :--- | :--- |
-| **Portfolio.py** | Hlavní řídicí třída pro správu kolekce pozic a generování PDF. |
-| **Position.py** | Logika výpočtu konkrétní investiční pozice (FIFO, měnový převod). |
-| **Asset.py** | Definice tříd pro různé typy finančních instrumentů a jejich grafy. |
-| **Transaction.py** | Zpracování nákupních a prodejních transakcí (vč. frakčních). |
-| **DownloadManager.py** | Zajišťuje stahování, ukládání a čištění historických dat. |
-| **BrokerImports.py** | Obsahuje funkce pro import transakcí z externích CSV souborů. |
-| **FigiApi.py** | Komunikace s OpenFIGI API pro mapování ISIN na Yahoo tickery. |
-| **Showcase.py** | Ukázkový skript demonstrující vytvoření portfolia a generování reportu. |
+| Soubor                 | Popis                                                                   |
+|:-----------------------|:------------------------------------------------------------------------|
+| **Portfolio.py**       | Hlavní řídicí třída pro správu kolekce pozic a generování PDF.          |
+| **Position.py**        | Logika výpočtu konkrétní investiční pozice (FIFO, měnový převod).       |
+| **Asset.py**           | Definice tříd pro různé typy finančních instrumentů a jejich grafy.     |
+| **Transaction.py**     | Zpracování nákupních a prodejních transakcí (vč. frakčních).            |
+| **DownloadManager.py** | Zajišťuje stahování, ukládání a čištění historických dat.               |
+| **BrokerImports.py**   | Obsahuje funkce pro import transakcí z externích CSV souborů.           |
+| **FigiApi.py**         | Komunikace s OpenFIGI API pro mapování ISIN na Yahoo tickery.           |
+| **Showcase.py**        | Ukázkový skript demonstrující vytvoření portfolia a generování reportu. |
+| **test_project.py**    | Provedení základních testů funkčnosti programu.                         |
 
 
 ### Instalace
