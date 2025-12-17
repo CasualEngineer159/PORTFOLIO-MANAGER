@@ -4,3 +4,4 @@ venv/
 .venv/
 __pycache__
 DATA/*
+PROGRAM/MyPortfolio.py

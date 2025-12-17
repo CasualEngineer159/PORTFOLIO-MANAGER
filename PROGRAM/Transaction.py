@@ -1,189 +1,221 @@
-from Asset import *
+import pandas as pd
+import numpy as np
+from datetime import datetime
 from enum import IntEnum
-from rich import print
 from typing import Tuple
+from Asset import *
+
+
+# ==============================================================================
+# ENUMERACE TYPŮ TRANSAKCÍ
+# ==============================================================================
 
 class TransactionType(IntEnum):
     LONG = 1
     FRACTION_LONG = 2
-    SHORT = 3
+
+
+# ==============================================================================
+# ZÁKLADNÍ TŘÍDA PRO TRANSAKCE
+# ==============================================================================
 
 class Transaction:
+    def __init__(self, asset: Asset, date: datetime, amount_owned: float,
+                 amount: int = None, price: float = None):
 
-    def __init__(self,
-                 asset: Asset,
-                 date: datetime,
-                 amount_owned : float,
-                 amount: int = None,
-                 price: float = None
-                 ):
-
+        # Základní atributy transakce
         self._asset = asset
         self._date = date
         self._amount_owned = amount_owned
         self._amount = amount
         self._price = price
+
+        # Inicializace výsledného dataframe a stavu
         self._transaction_prices = create_dataframe_from_date(self._date)
         self._terminate_position = False
 
-        # Nastavení parametrů -> různé dle typu transakce
+        # 1. Nastavení specifických parametrů dle typu transakce
         self._set_parameters()
 
-        # Kontrola správnosti transakce
+        # 2. Validace a kontrola dat
         self._check_transaction()
-
-        # Kontrola a upravení množství
         self._check_amount(amount_owned)
 
-        # Výpočet průběhu transakce
+        # 3. Výpočet finančních ukazatelů časové řady
         self._create_base()
         self._create_change()
         self._create_profit()
         self._create_price()
         self._create_mask()
 
+    # ==============================================================================
+    # VNITŘNÍ METODY PRO NASTAVENÍ A VALIDACI
+    # ==============================================================================
+
+    # Metoda určená k přepsání v potomcích pro nastavení specifických dat
     def _set_parameters(self):
-        ...
+        pass
 
-    def get_base(self):
-        return self._transaction_prices["Base"]
-
-    def get_amount(self) -> float:
-        return self._amount
-
-    def get_price(self) -> float:
-        return self._price
-
-    def _check_amount(self, amount_owned):
-        # Kontrola zda se nedostáváme s počtem do mínusu
-        if amount_owned + self._amount <= 0:
-            self._amount = -amount_owned
-            self._terminate_position = True
-
+    # Načte cenovou historii aktiva a připraví pomocné proměnné
     def _get_history(self):
+        # Generování rozsahu dat od transakce do dneška
         self._dates = pd.date_range(start=self._date, end=datetime.now().date(), freq='D')
+
+        # Získání cenových dat z objektu aktiva
         self._history = self._asset.get_prices(self._date)
         self._first_record_date = self._asset.get_earliest_record_date()
         self._record_to_date = self._get_record_to_date()
 
+    # Vrátí záznam ceny nejbližší datu transakce
     def _get_record_to_date(self) -> pd.DataFrame:
+        # Vyhledání nejbližšího předchozího nebo shodného záznamu
         nearest_row = self._history.index.asof(self._date)
+
+        # Pokud záznam neexistuje, zkusíme reindexaci časové řady
         if pd.isna(nearest_row):
             self._history = self._history.reindex(self._dates)
             self._history.index = self._history.index.date
             return self._get_record_to_date()
+
+        # Vrátí nalezený řádek historie
         return self._history.loc[nearest_row]
 
+    # Prověří, zda transakce proběhla v platném čase a za reálnou cenu
     def _check_transaction(self):
-
-        # Pokud byla transakce provedena dříve než existuje záznam, vyhodíme varování
+        # Kontrola, zda transakce nepředchází dostupným datům
         if self._date < self._first_record_date:
-            print(
-                f"[red]!!!Pozor, v datu {self._date} transakce {self._asset.get_name()} ještě není záznam cen!!![/red] první datum záznamu: {self._first_record_date}")
-            # Jestli nebyla zadána cena nákupu, určíme z nejbližší zavírací ceny
+            print(f"!!! Pozor: Pro datum {self._date} u aktiva {self._asset.get_name()} neexistují cenové záznamy.")
+            print(f"    První dostupný záznam v databázi: {self._first_record_date}")
+
+            # Pokud nebyla zadána cena, použijeme první dostupnou zavírací cenu
             if self._price is None:
                 self._price = self._history.loc[self._first_record_date, "Close"]
         else:
-            # Jestli nebyla zadána cena nákupu, určíme z nejbližší zavírací ceny
+            # Pokud nebyla zadána cena, použijeme zavírací cenu daného dne
             if self._price is None:
                 self._price = self._record_to_date["Close"]
 
-            # Zkontrolujeme zda cena zapadá do denního rozmezí
+            # Kontrola denního rozmezí (High/Low)
             low = self._record_to_date["Low"]
             high = self._record_to_date["High"]
-            if not low <= self._price <= high:
-                print(f"""
-        [red]!!! Cena {self._asset.get_name()} mimo denní rozsah!!![/red]
-        Platný rozsah: low: {low}, price: {self._price}, high: {high}""")
 
+            # Upozornění, pokud je zadaná cena mimo rozsah daného dne
+            if not (low <= self._price <= high):
+                print(f"!!! Varování: Cena {self._asset.get_name()} ({self._price}) je mimo denní rozsah.")
+                print(f"    Platný rozsah pro tento den: {low:.2f} - {high:.2f}")
+
+    # Kontroluje, zda prodej nepřekračuje držené množství
+    def _check_amount(self, amount_owned):
+        # Pokud by množství kleslo pod nulu, uzavřeme pozici na nulu
+        if amount_owned + self._amount <= 0:
+            self._amount = -amount_owned
+            self._terminate_position = True
+
+    # ==============================================================================
+    # VNITŘNÍ METODY PRO VÝPOČET HISTORIE (DATAFRAME)
+    # ==============================================================================
+
+    # Vypočítá počáteční investovanou částku (Base)
     def _create_base(self):
+        # Násobek množství a pořizovací ceny
         self._transaction_prices["Base"] = self._amount * self._price
 
+    # Vypočítá kumulativní vývoj hodnoty (Growth) od data transakce
     def _create_change(self):
-
-        # Vytvoření řady změny se začátkem v datu transakce
+        # Výpočet denních výnosů od data transakce
         returns = self._history.loc[self._date:, "return"]
         returns = returns.reindex(index=self._transaction_prices.index)
         returns = returns.fillna(0) + 1
 
-        # Výpočet procentuálního rozdílu nákupní ceny od poslední obchodované toho dne
+        # Výpočet změny ceny uvnitř dne nákupu vůči zavírací ceně
+        # $$ \text{intraday\_change} = \frac{\text{Close} - \text{Price}}{\text{Price}} + 1 $$
         intraday_change = (self._history.iloc[0]["Close"] - self._price) / self._price + 1
+
         if pd.isna(intraday_change):
             intraday_change = (self._history.loc[self._first_record_date, "Close"] - self._price) / self._price + 1
 
-        # Nastavení intraday change na den nákupu
-        #if not self._terminate_position:
+        # Nastavení úvodní změny na první den transakce
         returns.iloc[0] = intraday_change
-        #else:
-        #    returns.iloc[0] = 1
 
+        # Výpočet kumulativního produktu pro získání vývojové křivky
         self._transaction_prices["Growth"] = returns.cumprod()
 
+    # Vypočítá průběžný zisk v absolutních hodnotách
     def _create_profit(self):
+        # Rozdíl mezi aktuální hodnotou a základem
         self._transaction_prices["Profit"] = self._transaction_prices["Base"] * (self._transaction_prices["Growth"] - 1)
 
+    # Vypočítá celkovou tržní cenu pozice v čase
     def _create_price(self):
+        # Součet nákupního základu a dosaženého zisku
         self._transaction_prices["Price"] = self._transaction_prices["Base"].add(self._transaction_prices["Profit"])
 
+    # Vytvoří masku platnosti dat na základě existence cen v historii
     def _create_mask(self):
+        # Reindexace historie pro kontrolu děr v datech
         _dates = pd.date_range(start=self._date, end=datetime.now().date(), freq='D')
         self._history = self._history.reindex(_dates)
+
+        # Maska je True tam, kde máme k dispozici zavírací cenu
         self._transaction_prices["Mask"] = self._history["Close"].notna()
 
+    # ==============================================================================
+    # VEŘEJNÉ PŘÍSTUPOVÉ METODY (GETTERY)
+    # ==============================================================================
+
+    # Vrátí nákupní základnu (Base)
+    def get_base(self):
+        return self._transaction_prices["Base"]
+
+    # Vrátí počet kusů v transakci
+    def get_amount(self) -> float:
+        return self._amount
+
+    # Vrátí jednotkovou cenu transakce
+    def get_price(self) -> float:
+        return self._price
+
+    # Vrátí kompletní DataFrame s vypočtenou historií
     def get_transaction(self):
         return self._transaction_prices
 
+    # Vrátí datum provedení transakce
     def get_date(self) -> datetime:
         return self._date
 
+
+# ==============================================================================
+# KONKRÉTNÍ IMPLEMENTACE TYPŮ TRANSAKCÍ
+# ==============================================================================
+
 class LongTransaction(Transaction):
-    def __init__(self,
-                 asset: Asset,
-                 date: datetime,
-                 amount_owned : float,
-                 amount: int = None,
-                 price: float = None
-                 ):
+    def __init__(self, asset: Asset, date: datetime, amount_owned: float,
+                 amount: int = None, price: float = None):
         super().__init__(asset, date, amount_owned, amount, price)
 
+    # Nastaví parametry specifické pro nákup celých kusů
     def _set_parameters(self):
-
-        # Získání historie assetu
+        # Načtení historie a názvu aktiva
         self._get_history()
-
-        # Získání jména assetu
         self._name = self._asset.get_name()
+
 
 class LongFractionTransaction(Transaction):
-    def __init__(self,
-                 asset: Asset,
-                 date: datetime,
-                 amount_owned : float,
-                 amount: int = None,
-                 price: float = None
-                 ):
+    def __init__(self, asset: Asset, date: datetime, amount_owned: float,
+                 amount: int = None, price: float = None):
         super().__init__(asset, date, amount_owned, amount, price)
 
+    # Nastaví parametry pro frakční nákup (přepočet množství z ceny)
     def _set_parameters(self):
-
-        # Získání historie assetu
+        # Načtení historie
         self._get_history()
-
-        # Získání jména assetu
         self._name = self._asset.get_name()
 
-        # Určíme zavírací cenu
+        # Určení aktuální zavírací ceny pro přepočet frakce
         close_price = self._record_to_date["Close"]
         if pd.isna(close_price):
             close_price = self._history.loc[self._first_record_date, "Close"]
 
+        # Přepočet množství na základě vložené částky (v parametru price) a kurzu
         self._amount = self._price / close_price
         self._price = close_price
-
-
-
-
-
-
-
-
