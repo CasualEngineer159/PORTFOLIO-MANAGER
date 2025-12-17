@@ -1,5 +1,7 @@
 ### Portfolio Manager
 
+https://github.com/CasualEngineer159/PORTFOLIO-MANAGER.git
+
 Tento projekt je nástroj v jazyce Python určený pro komplexní správu a analýzu investičních portfolií. Umožňuje uživatelům sledovat různé typy aktiv, automaticky stahovat historická data, počítat výkonnost pomocí metody FIFO a generovat detailní PDF reporty včetně grafů vývoje.
 
 ### Hlavní funkce projektu
