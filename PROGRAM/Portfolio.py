@@ -82,14 +82,34 @@ class Portfolio:
         self._currency = currency
     
     # Vrátí cenový průběh portfolia v čase
-    def get_portfolio(self, real:bool = False):
+    def get_portfolio(self):
         self._create_first_date()
         self._create_portfolio_prices()
         self._add_positions()
         self._calculate_growth()
-        if real:
-            self._portfolio_prices = self._portfolio_prices[self._portfolio_prices["Mask"]]
-        self.plot_price(real)
+        self._add_record_zero()
+        self.plot_price()
+
+    def _add_record_zero(self):
+        # 1. Vypočítáme datum o jeden den dříve
+        zero_date = self._first_date - pd.Timedelta(days=1)
+
+        self._portfolio_prices.index = self._portfolio_prices.index.date
+
+        # 2. Vložíme nový řádek do DataFrame (všechny sloupce nastavíme na 0)
+        # .loc vytvoří nový řádek, pokud index zero_date ještě neexistuje
+
+        self._portfolio_prices.loc[zero_date, "Mask"] = True
+        self._portfolio_prices.loc[zero_date, "Base"] = 0
+        self._portfolio_prices.loc[zero_date, "Growth"] = 1
+        self._portfolio_prices.loc[zero_date, "Price"] = 0
+        self._portfolio_prices.loc[zero_date, "Profit"] = 0
+
+        # 4. DŮLEŽITÉ: Seřadíme DataFrame podle indexu (data),
+        # aby nový řádek nezůstal na konci tabulky
+        self._portfolio_prices.sort_index(inplace=True)
+
+        self._first_date = zero_date
 
     def export_portfolio_to_pdf(self):
         filename = f"../DATA/PERSONAL/Portfolio_Report_{self._name}.pdf"
@@ -260,6 +280,34 @@ class Portfolio:
         pdf.cell(sum(col_widths[:-1]), 8, "CELKEM REALIZOVANÝ ZISK:", border=1, align='L')
         pdf.cell(col_widths[-1], 8, f"{total_profit_closed:.2f}", border=1, align='R')
 
+        # --- 3. GRAFY (Každý graf na samostatnou stranu) ---
+        graph_dir = "../GRAPHS/"
+
+        try:
+            if os.path.exists(graph_dir):
+                all_files = os.listdir(graph_dir)
+                # Najdeme grafy obsahující jméno portfolia
+                portfolio_graphs = [f for f in all_files if self._name in f and f.lower().endswith('.png')]
+
+                # Seřadíme je abecedně (aby např. grafy 01, 02 byly ve správném pořadí)
+                portfolio_graphs.sort()
+
+                for graph_name in portfolio_graphs:
+                    pdf.add_page()  # Každý graf dostane svou čistou stránku
+
+                    full_path = os.path.join(graph_dir, graph_name)
+
+                    # Vložení velkého obrázku
+                    # A4 Landscape šířka je 297mm. Nastavením w=260 ho uděláme přes celou stranu.
+                    # x=18.5 vycentruje 260mm široký obrázek ( (297-260) / 2 = 18.5 )
+                    pdf.image(full_path, x=18.5, y=35, w=260)
+
+            else:
+                print(f"⚠️ Složka s grafy nebyla nalezena: {graph_dir}")
+
+        except Exception as e:
+            print(f"⚠️ Chyba při zpracování grafů: {e}")
+
         # --- ULOŽENÍ ---
         try:
             pdf.output(filename)
@@ -270,8 +318,8 @@ class Portfolio:
             print(f"❌ Chyba při ukládání PDF (máš ho otevřené?): {e}")
 
     # Vytvoří graf png   
-    def plot_price(self, real):
-        plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf růstu {self._currency} {real}", "Growth")
-        plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf ceny {self._currency} {real}", "Price")
-        plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf profitu {self._currency} {real}", "Profit")
-        plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf báze {self._currency} {real}", "Base")
+    def plot_price(self):
+        plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf růstu {self._currency}", "Growth")
+        plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf ceny {self._currency}", "Price")
+        plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf profitu {self._currency}", "Profit")
+        plot_price(self._portfolio_prices, self._first_date, f"Portfolio {self._name} graf báze {self._currency}", "Base")
