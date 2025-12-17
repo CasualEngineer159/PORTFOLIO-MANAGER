@@ -3,5 +3,12 @@ GRAPHS/*
 venv/
 .venv/
 __pycache__
-DATA/*
+
+# Místo DATA/* použijte toto:
+DATA/**/*
+
+# A nyní výjimka pro konkrétní cestu:
+!DATA/IMPORTANT/
+!DATA/IMPORTANT/EXCHANGE_CODES.csv
+
 PROGRAM/MyPortfolio.py
