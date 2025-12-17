@@ -5,17 +5,6 @@ portfolio2 = Portfolio("Long", "EUR")
 degiro_portfolio = Portfolio("Degiro", "EUR")
 degiro_portfolio_2 = Portfolio("Degiro LONG WHOLE", "EUR")
 
-#for i in range(15,24):
-#    for j in range(1,13):
-#        print(asset_creator("AAPL"))
-#        portfolio.new_transaction(
-#            transaction_type=TransactionType.FRACTION_LONG,
-#            date=datetime(2000+i,j,1),
-#            asset=asset_creator("AAPL"),
-#            price=150,  # Zde použijeme vypočtenou hodnotu
-#            #currency="CZK"
-#        )
-
 file_path = f'../DATA/PERSONAL/Transactions.csv'
 
 degiro_transactions = pd.read_csv(
@@ -62,9 +51,7 @@ for row in degiro_transactions.itertuples():
         venue=exchange
     )
 
-#degiro_portfolio.get_portfolio()
-
-#degiro_portfolio.print_portfolio_positions()
+# degiro_portfolio_2.new_transaction(TransactionType.LONG,datetime(2021,4,28),"GC=F","CZK",1)
 
 degiro_portfolio_2.get_portfolio()
 

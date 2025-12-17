@@ -82,33 +82,27 @@ class Stock(Asset):
     def __init__(self, ticker):
         self.manager = yfinance_m
         super().__init__(ticker)
-        #print(self._name)
 
 class Commodity(Asset):
     def __init__(self, ticker):
         self.manager = yfinance_m
         super().__init__(ticker)
-        #print(self._name)
 
 class Crypto(Asset):
     def __init__(self, ticker):
         self.manager = yfinance_m
         super().__init__(ticker)
-        #print(self._name)
-
 
 class ETF(Asset):
     def __init__(self, ticker):
         self.manager = yfinance_m
         super().__init__(ticker)
-        #print(self._name)
 
 class Futures(Asset):
     def __init__(self, ticker):
         self.manager = yfinance_m
         super().__init__(ticker)
         self._name = self._stock_info.get("shortName", self._ticker)
-        #print(self._name)
 
 class Forex(Asset):
     def __init__(self, ticker):
@@ -120,7 +114,7 @@ class Forex(Asset):
         self._daily_history = fill_gaps(self._daily_history)
         return self._daily_history.loc[start_date:].copy()
 
-    def get_rate(self, date) -> float:
+    def get_rate(self, date=datetime.now()) -> float:
         return get_closest_value(self._daily_history, date,"Close")
 
 forex_dict = {}
